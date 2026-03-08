@@ -56,19 +56,17 @@ changelog:
       - "^test:"
       - "^ci:"
 
-# Homebrew tap — uncomment when rootisgod/homebrew-tap repo exists
-# and HOMEBREW_TAP_GITHUB_TOKEN secret is configured
-# brews:
-#   - name: multipass-mcp
-#     repository:
-#       owner: rootisgod
-#       name: homebrew-tap
-#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-#     directory: Formula
-#     homepage: "https://github.com/rootisgod/multipass-mcp"
-#     description: "MCP server for managing Multipass virtual machines"
-#     license: "MIT"
-#     test: |
-#       system "#{bin}/multipass-mcp", "--help"
-#     install: |
-#       bin.install "multipass-mcp"
+brews:
+  - name: multipass-mcp
+    repository:
+      owner: rootisgod
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/rootisgod/multipass-mcp"
+    description: "MCP server for managing Multipass virtual machines"
+    license: "MIT"
+    test: |
+      system "#{bin}/multipass-mcp", "--help"
+    install: |
+      bin.install "multipass-mcp"

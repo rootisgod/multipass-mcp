@@ -227,21 +227,6 @@ Claude: [calls stop(name="dev")]
        [calls start(name="dev-test")]
 ```
 
-## Legacy Python Implementation
-
-A Python implementation is available in `src/multipass_mcp/` for reference. It requires Python 3.10+ and the `mcp[cli]` package. The Go implementation is the preferred and actively maintained version.
-
-```bash
-# Install Python version (legacy)
-uv venv && uv pip install -e .
-
-# Run Python version
-.venv/bin/multipass-mcp
-
-# Test with MCP Inspector
-mcp dev src/multipass_mcp/server.py
-```
-
 ## Design Notes
 
 - **No shell injection** — `exec_command` takes a list of strings, not a shell string. Arguments are passed directly to the subprocess.

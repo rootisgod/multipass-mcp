@@ -29,17 +29,6 @@ go.mod / go.sum             # module dependencies
 .github/workflows/release.yml  # GitHub Actions release pipeline
 ```
 
-### Legacy Python implementation
-
-```
-src/multipass_mcp/
-├── __init__.py             # empty package marker
-└── server.py               # original Python server (all-in-one)
-pyproject.toml              # Python build config
-```
-
-The Python implementation is kept for reference but is no longer the primary codebase.
-
 ## Key Patterns
 
 - `runMultipass(ctx, timeout, args...)` — subprocess helper, returns stdout or error with stderr

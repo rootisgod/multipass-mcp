@@ -24,11 +24,14 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
+    formats:
+      - tar.gz
+      - zip
+    formats_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
@@ -56,17 +59,19 @@ changelog:
       - "^test:"
       - "^ci:"
 
-brews:
-  - name: multipass-mcp
-    repository:
-      owner: rootisgod
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
-    homepage: "https://github.com/rootisgod/multipass-mcp"
-    description: "MCP server for managing Multipass virtual machines"
-    license: "MIT"
-    test: |
-      system "#{bin}/multipass-mcp", "--help"
-    install: |
-      bin.install "multipass-mcp"
+# Homebrew tap — uncomment when rootisgod/homebrew-tap repo exists
+# and HOMEBREW_TAP_GITHUB_TOKEN secret is configured
+# brews:
+#   - name: multipass-mcp
+#     repository:
+#       owner: rootisgod
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     directory: Formula
+#     homepage: "https://github.com/rootisgod/multipass-mcp"
+#     description: "MCP server for managing Multipass virtual machines"
+#     license: "MIT"
+#     test: |
+#       system "#{bin}/multipass-mcp", "--help"
+#     install: |
+#       bin.install "multipass-mcp"

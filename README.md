@@ -15,6 +15,12 @@ An MCP server for managing [Multipass](https://multipass.run/) virtual machines 
 brew install rootisgod/tap/multipass-mcp
 ```
 
+To uninstall:
+
+```bash
+brew uninstall multipass-mcp
+```
+
 ### Download binary
 
 Download the latest release from [GitHub Releases](https://github.com/rootisgod/multipass-mcp/releases) for your platform:

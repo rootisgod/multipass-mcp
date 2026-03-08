@@ -23,6 +23,7 @@ func main() {
 	tools.RegisterSnapshotTools(s)
 	tools.RegisterConfigTools(s)
 	tools.RegisterSystemTools(s)
+	tools.RegisterInfoTools(s)
 
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)

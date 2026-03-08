@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Multipass MCP Server — exposes the Multipass CLI as an MCP server with 25 tools and 6 resources. Lets AI assistants manage Ubuntu VMs.
+Multipass MCP Server — exposes the Multipass CLI as an MCP server with 32 tools and 6 resources. Lets AI assistants manage Ubuntu VMs.
 
 ## Tech Stack
 
@@ -18,12 +18,12 @@ main.go                     # entrypoint, server setup, tool registration
 tools/
 ├── helpers.go              # runMultipass/runMultipassJSON subprocess helpers
 ├── instance.go             # launch, start, stop, restart, suspend, delete, recover
-├── exec.go                 # exec_command
+├── exec.go                 # run_script, exec_command
 ├── files.go                # transfer, mount_directory, umount_directory
 ├── snapshots.go            # snapshot, restore, clone
 ├── config.go               # get_config, set_config
 ├── system.go               # purge, authenticate
-├── info.go                 # list_instances, get_instance, find_images, list_networks, list_snapshots, get_version, list_aliases
+├── info.go                 # list_instances, get_instance, find_images, list_networks, list_snapshots, get_version, list_aliases, list_mounts, list_deleted, instance_exists, get_bridged_network, disk_usage_check, wait_until_running
 └── resources.go            # 6 resources (5 static + 1 template)
 go.mod / go.sum             # module dependencies
 .goreleaser.yaml            # cross-compile + Cosign signing + Homebrew tap
@@ -59,7 +59,7 @@ claude mcp add multipass-mcp -- /path/to/multipass-mcp
 
 ## Verified Working
 
-End-to-end tested: launch VM, install packages via exec_command, deploy files, delete+purge. All 25 tools and 6 resources confirmed registered (5 static + 1 template).
+End-to-end tested: launch VM, install packages via exec_command, deploy files, delete+purge. All 32 tools and 6 resources confirmed registered (5 static + 1 template).
 
 ## Notes
 

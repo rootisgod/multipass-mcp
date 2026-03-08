@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "multipass-mcp"
+version = "0.1.0"
+description = "MCP server for managing Multipass virtual machines"
+requires-python = ">=3.10"
+dependencies = ["mcp[cli]"]
+
+[project.scripts]
+multipass-mcp = "multipass_mcp.server:main"

@@ -6,47 +6,66 @@ Multipass MCP Server — exposes the Multipass CLI as an MCP server with 18 tool
 
 ## Tech Stack
 
-- Python 3.10+, single-module server
-- FastMCP from `mcp[cli]` package
-- Hatchling build system
-- Async subprocess calls to `multipass` CLI
+- Go 1.23+, static binary (CGO_ENABLED=0)
+- mark3labs/mcp-go for MCP server framework
+- os/exec for subprocess calls to `multipass` CLI
+- GoReleaser for cross-platform builds and releases
 
 ## Project Structure
 
 ```
-src/multipass_mcp/
-├── __init__.py     # empty package marker
-└── server.py       # entire server: helpers, 6 resources, 18 tools, main()
-pyproject.toml      # build config, deps, entry point
+main.go                     # entrypoint, server setup, tool registration
+tools/
+├── helpers.go              # runMultipass/runMultipassJSON subprocess helpers
+├── instance.go             # launch, start, stop, restart, suspend, delete, recover
+├── exec.go                 # exec_command
+├── files.go                # transfer, mount_directory, umount_directory
+├── snapshots.go            # snapshot, restore, clone
+├── config.go               # get_config, set_config
+├── system.go               # purge, authenticate
+└── resources.go            # 6 resources (5 static + 1 template)
+go.mod / go.sum             # module dependencies
+.goreleaser.yaml            # cross-compile + Cosign signing + Homebrew tap
+.github/workflows/release.yml  # GitHub Actions release pipeline
 ```
 
-All logic lives in `server.py`. No need for multiple modules at this scale.
+### Legacy Python implementation
+
+```
+src/multipass_mcp/
+├── __init__.py             # empty package marker
+└── server.py               # original Python server (all-in-one)
+pyproject.toml              # Python build config
+```
+
+The Python implementation is kept for reference but is no longer the primary codebase.
 
 ## Key Patterns
 
-- `run_multipass(*args)` — async subprocess helper, raises `RuntimeError` on failure
-- `run_multipass_json(*args)` — same but appends `--format json` and parses result
-- Resources use `@mcp.resource()`, tools use `@mcp.tool()`
+- `runMultipass(ctx, timeout, args...)` — subprocess helper, returns stdout or error with stderr
+- `runMultipassJSON(ctx, timeout, args...)` — same but appends `--format json` and parses result
+- Resources registered via `s.AddResource()` / `s.AddResourceTemplate()`
+- Tools registered via `s.AddTool(tool, handler)`
 - `name="all"` on lifecycle tools translates to `--all` CLI flag
-- `exec_command` takes `command: list[str]` (not a shell string) to prevent injection
+- `exec_command` takes `command: []string` (not a shell string) to prevent injection
 - Timeouts: 300s default, 600s for `launch`
 
 ## Development Commands
 
 ```bash
-# Install in dev mode
-uv venv && uv pip install -e .
+# Build
+CGO_ENABLED=0 go build -o multipass-mcp .
 
-# Test with MCP Inspector
-mcp dev src/multipass_mcp/server.py
+# Check
+go vet ./...
 
 # Register with Claude Code
-claude mcp add multipass-mcp -- /path/to/.venv/bin/multipass-mcp
+claude mcp add multipass-mcp -- /path/to/multipass-mcp
 ```
 
 ## Entry Point
 
-`multipass-mcp` CLI → `multipass_mcp.server:main()` → `mcp.run(transport="stdio")`
+`main.go` → registers tools/resources on `server.MCPServer` → `server.ServeStdio(s)`
 
 ## Verified Working
 

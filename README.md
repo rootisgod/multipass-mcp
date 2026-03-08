@@ -4,22 +4,65 @@ An MCP server for managing [Multipass](https://multipass.run/) virtual machines 
 
 ## Prerequisites
 
-- Python 3.10+
 - [Multipass](https://multipass.run/) installed and on your PATH
 - Verify with: `multipass version`
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
 ```bash
-# Clone the repo
-git clone https://github.com/your-username/multipass-mcp.git
+brew install rootisgod/tap/multipass-mcp
+```
+
+### Download binary
+
+Download the latest release from [GitHub Releases](https://github.com/rootisgod/multipass-mcp/releases) for your platform:
+
+| Platform | Architecture | File |
+|----------|-------------|------|
+| macOS | Apple Silicon (M1+) | `multipass-mcp_*_darwin_arm64.tar.gz` |
+| macOS | Intel | `multipass-mcp_*_darwin_amd64.tar.gz` |
+| Linux | x86_64 | `multipass-mcp_*_linux_amd64.tar.gz` |
+| Linux | ARM64 | `multipass-mcp_*_linux_arm64.tar.gz` |
+| Windows | x86_64 | `multipass-mcp_*_windows_amd64.zip` |
+| Windows | ARM64 | `multipass-mcp_*_windows_arm64.zip` |
+
+```bash
+# Example: macOS Apple Silicon
+tar xzf multipass-mcp_*_darwin_arm64.tar.gz
+chmod +x multipass-mcp
+sudo mv multipass-mcp /usr/local/bin/
+```
+
+### Verify checksums
+
+Each release includes a `checksums.txt` file signed with [Cosign](https://github.com/sigstore/cosign) (keyless, Sigstore OIDC).
+
+```bash
+# Download checksums and signature
+curl -LO https://github.com/rootisgod/multipass-mcp/releases/latest/download/checksums.txt
+curl -LO https://github.com/rootisgod/multipass-mcp/releases/latest/download/checksums.txt.sig
+curl -LO https://github.com/rootisgod/multipass-mcp/releases/latest/download/checksums.txt.pem
+
+# Verify signature
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature checksums.txt.sig \
+  --certificate-identity-regexp "https://github.com/rootisgod/multipass-mcp" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  checksums.txt
+
+# Verify file integrity
+sha256sum -c checksums.txt --ignore-missing
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/rootisgod/multipass-mcp.git
 cd multipass-mcp
-
-# Create a virtual environment and install
-uv venv && uv pip install -e .
-
-# Or with plain pip
-python -m venv .venv && source .venv/bin/activate && pip install -e .
+CGO_ENABLED=0 go build -o multipass-mcp .
 ```
 
 ## Configuration
@@ -27,7 +70,7 @@ python -m venv .venv && source .venv/bin/activate && pip install -e .
 ### Claude Code
 
 ```bash
-claude mcp add multipass-mcp -- /path/to/multipass-mcp/.venv/bin/multipass-mcp
+claude mcp add multipass-mcp -- /path/to/multipass-mcp
 ```
 
 ### Claude Desktop
@@ -41,19 +84,11 @@ Add to your config file:
 {
   "mcpServers": {
     "multipass": {
-      "command": "/path/to/multipass-mcp/.venv/bin/multipass-mcp"
+      "command": "/path/to/multipass-mcp"
     }
   }
 }
 ```
-
-### Testing with MCP Inspector
-
-```bash
-mcp dev src/multipass_mcp/server.py
-```
-
-This opens a web UI where you can call tools and read resources interactively.
 
 ## Resources
 
@@ -192,9 +227,25 @@ Claude: [calls stop(name="dev")]
        [calls start(name="dev-test")]
 ```
 
+## Legacy Python Implementation
+
+A Python implementation is available in `src/multipass_mcp/` for reference. It requires Python 3.10+ and the `mcp[cli]` package. The Go implementation is the preferred and actively maintained version.
+
+```bash
+# Install Python version (legacy)
+uv venv && uv pip install -e .
+
+# Run Python version
+.venv/bin/multipass-mcp
+
+# Test with MCP Inspector
+mcp dev src/multipass_mcp/server.py
+```
+
 ## Design Notes
 
-- **No shell injection** — `exec_command` takes a `list[str]`, not a shell string. Arguments are passed directly to the subprocess.
+- **No shell injection** — `exec_command` takes a list of strings, not a shell string. Arguments are passed directly to the subprocess.
 - **Timeouts** — Most commands time out after 300s. `launch` defaults to 600s since image downloads can be slow.
-- **Error handling** — CLI errors are raised as exceptions with the stderr output, which MCP surfaces to the AI assistant automatically.
+- **Error handling** — CLI errors are returned as tool errors with the stderr output, which MCP surfaces to the AI assistant automatically.
 - **Stdio transport** — The server communicates over stdin/stdout using the MCP stdio protocol. Nothing is printed to stdout except MCP messages.
+- **Static binary** — Built with `CGO_ENABLED=0` for fully static binaries with no external dependencies.

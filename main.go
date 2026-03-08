@@ -11,7 +11,7 @@ import (
 func main() {
 	s := server.NewMCPServer(
 		"multipass",
-		"0.2.0",
+		"0.1.4",
 		server.WithToolCapabilities(true),
 		server.WithResourceCapabilities(true, true),
 	)

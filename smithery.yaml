@@ -1,0 +1,13 @@
+build:
+  dockerBuildPath: ./
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties: {}
+  commandFunction: |-
+    (config) => ({
+      command: "multipass-mcp",
+      args: []
+    })

@@ -4,22 +4,27 @@ An MCP server for managing [Multipass](https://multipass.run/) virtual machines 
 
 ## Prerequisites
 
-- Python 3.10+
 - [Multipass](https://multipass.run/) installed and on your PATH
 - Verify with: `multipass version`
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
 ```bash
-# Clone the repo
-git clone https://github.com/your-username/multipass-mcp.git
+brew install iainmckee/tap/multipass-mcp
+```
+
+### Download binary
+
+Download the latest binary for your platform from the [releases page](https://github.com/iainmckee/multipass-mcp/releases).
+
+### Build from source
+
+```bash
+git clone https://github.com/iainmckee/multipass-mcp.git
 cd multipass-mcp
-
-# Create a virtual environment and install
-uv venv && uv pip install -e .
-
-# Or with plain pip
-python -m venv .venv && source .venv/bin/activate && pip install -e .
+CGO_ENABLED=0 go build -o multipass-mcp .
 ```
 
 ## Configuration
@@ -27,8 +32,7 @@ python -m venv .venv && source .venv/bin/activate && pip install -e .
 ### Claude Code
 
 ```bash
-claude mcp add multipass-mcp -- /path/to/multipass-mcp/.venv/bin/multipass-mcp
-claude mcp add multipass-mcp -- /Users/iain/Code/Github/multipass-mcp/.venv/bin/multipass-mcp
+claude mcp add multipass-mcp -- /path/to/multipass-mcp
 ```
 
 ### Claude Desktop
@@ -42,19 +46,11 @@ Add to your config file:
 {
   "mcpServers": {
     "multipass": {
-      "command": "/path/to/multipass-mcp/.venv/bin/multipass-mcp"
+      "command": "/path/to/multipass-mcp"
     }
   }
 }
 ```
-
-### Testing with MCP Inspector
-
-```bash
-mcp dev src/multipass_mcp/server.py
-```
-
-This opens a web UI where you can call tools and read resources interactively.
 
 ## Resources
 
@@ -195,7 +191,8 @@ Claude: [calls stop(name="dev")]
 
 ## Design Notes
 
-- **No shell injection** — `exec_command` takes a `list[str]`, not a shell string. Arguments are passed directly to the subprocess.
+- **No shell injection** — `exec_command` takes an array of strings (e.g. `["ls", "-la"]`), not a shell string. Arguments are passed directly to the subprocess.
 - **Timeouts** — Most commands time out after 300s. `launch` defaults to 600s since image downloads can be slow.
-- **Error handling** — CLI errors are raised as exceptions with the stderr output, which MCP surfaces to the AI assistant automatically.
+- **Error handling** — CLI errors are returned with the stderr output, which MCP surfaces to the AI assistant automatically.
 - **Stdio transport** — The server communicates over stdin/stdout using the MCP stdio protocol. Nothing is printed to stdout except MCP messages.
+- **Static binary** — Built with `CGO_ENABLED=0` for a self-contained binary with no runtime dependencies.

@@ -9,16 +9,26 @@ import (
 
 func RegisterSystemTools(s *server.MCPServer) {
 	s.AddTool(
-		mcp.NewTool("purge",
-			mcp.WithDescription("Permanently delete all trashed (deleted) Multipass instances.\n\nThis is irreversible. All instances previously deleted with 'delete' will be permanently removed."),
+		mcp.NewTool("multipass_purge",
+			mcp.WithDescription("Permanently delete all trashed (deleted) Multipass instances.\n\nThis is irreversible. All instances previously deleted with 'multipass_delete' will be permanently removed."),
+			mcp.WithTitleAnnotation("Multipass: Purge Deleted Instances"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(true),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handlePurge,
 	)
 
 	s.AddTool(
-		mcp.NewTool("authenticate",
+		mcp.NewTool("multipass_authenticate",
 			mcp.WithDescription("Authenticate with the Multipass service using a passphrase."),
 			mcp.WithString("passphrase", mcp.Required(), mcp.Description("Authentication passphrase.")),
+			mcp.WithTitleAnnotation("Multipass: Authenticate"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleAuthenticate,
 	)

@@ -8,10 +8,13 @@ import (
 	"github.com/rootisgod/multipass-mcp/tools"
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	s := server.NewMCPServer(
 		"multipass",
-		"0.1.4",
+		version,
 		server.WithToolCapabilities(true),
 		server.WithResourceCapabilities(true, true),
 	)

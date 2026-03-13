@@ -11,7 +11,7 @@ import (
 
 func RegisterInstanceTools(s *server.MCPServer) {
 	s.AddTool(
-		mcp.NewTool("launch",
+		mcp.NewTool("multipass_launch",
 			mcp.WithDescription("Launch a new Multipass VM instance."),
 			mcp.WithString("image", mcp.Description("Image to launch (e.g. \"22.04\", \"daily:24.04\"). Defaults to latest LTS.")),
 			mcp.WithString("name", mcp.Description("Name for the instance. Auto-generated if omitted.")),
@@ -22,56 +22,91 @@ func RegisterInstanceTools(s *server.MCPServer) {
 			mcp.WithString("network", mcp.Description("Network to connect to (from multipass networks).")),
 			mcp.WithString("mount", mcp.Description("Host path to mount in the instance (source:target format).")),
 			mcp.WithNumber("timeout", mcp.Description("Timeout in seconds (default 600 — image downloads can be slow).")),
+			mcp.WithTitleAnnotation("Multipass: Launch Instance"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleLaunch,
 	)
 
 	s.AddTool(
-		mcp.NewTool("start",
+		mcp.NewTool("multipass_start",
 			mcp.WithDescription("Start a stopped Multipass instance."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to start all instances.")),
+			mcp.WithTitleAnnotation("Multipass: Start Instance"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleStart,
 	)
 
 	s.AddTool(
-		mcp.NewTool("stop",
+		mcp.NewTool("multipass_stop",
 			mcp.WithDescription("Stop a running Multipass instance."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to stop all instances.")),
 			mcp.WithBoolean("force", mcp.Description("Force stop without waiting for graceful shutdown.")),
+			mcp.WithTitleAnnotation("Multipass: Stop Instance"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleStop,
 	)
 
 	s.AddTool(
-		mcp.NewTool("restart",
+		mcp.NewTool("multipass_restart",
 			mcp.WithDescription("Restart a Multipass instance."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to restart all instances.")),
+			mcp.WithTitleAnnotation("Multipass: Restart Instance"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleRestart,
 	)
 
 	s.AddTool(
-		mcp.NewTool("suspend",
+		mcp.NewTool("multipass_suspend",
 			mcp.WithDescription("Suspend a running Multipass instance."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to suspend all instances.")),
+			mcp.WithTitleAnnotation("Multipass: Suspend Instance"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleSuspend,
 	)
 
 	s.AddTool(
-		mcp.NewTool("delete",
+		mcp.NewTool("multipass_delete",
 			mcp.WithDescription("Delete a Multipass instance (can be recovered unless purged)."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to delete all instances.")),
 			mcp.WithBoolean("purge", mcp.Description("Permanently delete instead of moving to trash.")),
+			mcp.WithTitleAnnotation("Multipass: Delete Instance"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(true),
+			mcp.WithIdempotentHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleDelete,
 	)
 
 	s.AddTool(
-		mcp.NewTool("recover",
+		mcp.NewTool("multipass_recover",
 			mcp.WithDescription("Recover a deleted (trashed) Multipass instance."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to recover all deleted instances.")),
+			mcp.WithTitleAnnotation("Multipass: Recover Instance"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleRecover,
 	)

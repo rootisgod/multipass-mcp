@@ -409,7 +409,11 @@ func handleWaitUntilRunningTool(ctx context.Context, req mcp.CallToolRequest) (*
 			if time.Now().After(deadline) {
 				return mcp.NewToolResultError(fmt.Sprintf("timeout after %ds waiting for %s: %v", timeoutSecs, name, err)), nil
 			}
-			time.Sleep(pollInterval)
+			select {
+			case <-time.After(pollInterval):
+			case <-ctx.Done():
+				return mcp.NewToolResultError(fmt.Sprintf("cancelled waiting for %s to reach Running state", name)), nil
+			}
 			continue
 		}
 
@@ -444,6 +448,10 @@ func handleWaitUntilRunningTool(ctx context.Context, req mcp.CallToolRequest) (*
 		if time.Now().After(deadline) {
 			return mcp.NewToolResultError(fmt.Sprintf("timeout after %ds waiting for %s to reach Running state", timeoutSecs, name)), nil
 		}
-		time.Sleep(pollInterval)
+		select {
+		case <-time.After(pollInterval):
+		case <-ctx.Done():
+			return mcp.NewToolResultError(fmt.Sprintf("cancelled waiting for %s to reach Running state", name)), nil
+		}
 	}
 }

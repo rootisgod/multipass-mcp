@@ -22,7 +22,7 @@ func RegisterSystemTools(s *server.MCPServer) {
 
 	s.AddTool(
 		mcp.NewTool("multipass_authenticate",
-			mcp.WithDescription("Authenticate with the Multipass service using a passphrase."),
+			mcp.WithDescription("Authenticate with the Multipass service using a passphrase.\n\nWARNING: The passphrase is passed as a CLI argument and may be visible in the system process list."),
 			mcp.WithString("passphrase", mcp.Required(), mcp.Description("Authentication passphrase.")),
 			mcp.WithTitleAnnotation("Multipass: Authenticate"),
 			mcp.WithReadOnlyHintAnnotation(false),

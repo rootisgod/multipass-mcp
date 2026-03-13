@@ -37,7 +37,7 @@ func runMultipass(ctx context.Context, timeout time.Duration, args ...string) (s
 
 // runMultipassJSON executes a multipass CLI command with --format json and parses the result.
 func runMultipassJSON(ctx context.Context, timeout time.Duration, args ...string) (json.RawMessage, error) {
-	fullArgs := append(args, "--format", "json")
+	fullArgs := append(append([]string{}, args...), "--format", "json")
 	result, err := runMultipass(ctx, timeout, fullArgs...)
 	if err != nil {
 		return nil, err

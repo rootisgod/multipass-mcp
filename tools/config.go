@@ -10,8 +10,8 @@ import (
 func RegisterConfigTools(s *server.MCPServer) {
 	s.AddTool(
 		mcp.NewTool("multipass_get_config",
-			mcp.WithDescription("Get Multipass configuration settings."),
-			mcp.WithString("key", mcp.Description("Specific setting key (e.g. \"local.driver\"). Omit to get all settings.")),
+			mcp.WithDescription("Get a Multipass configuration value by key, or list all available setting keys."),
+			mcp.WithString("key", mcp.Description("Specific setting key to read (e.g. \"local.driver\"). Omit to list all available key names.")),
 			mcp.WithTitleAnnotation("Multipass: Get Config"),
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),

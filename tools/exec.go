@@ -19,6 +19,7 @@ func RegisterExecTools(s *server.MCPServer) {
 			mcp.WithString("script", mcp.Required(), mcp.Description("The script content to execute (multi-line string).")),
 			mcp.WithString("interpreter", mcp.Description("Interpreter to run the script with (default \"bash\"). Examples: \"bash\", \"python3\", \"sh\".")),
 			mcp.WithString("working_directory", mcp.Description("Working directory inside the instance.")),
+			mcp.WithNumber("timeout", mcp.Description("Timeout in seconds (default 300). Increase for long-running scripts.")),
 			mcp.WithTitleAnnotation("Multipass: Run Script"),
 			mcp.WithReadOnlyHintAnnotation(false),
 			mcp.WithDestructiveHintAnnotation(false),
@@ -74,6 +75,11 @@ func handleRunScript(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 	}
 	tmpFile.Close()
 
+	timeout := defaultTimeout
+	if t := req.GetInt("timeout", 0); t > 0 {
+		timeout = time.Duration(t) * time.Second
+	}
+
 	// Transfer to instance
 	remotePath := fmt.Sprintf("/tmp/%s", filepath.Base(tmpPath))
 	dest := fmt.Sprintf("%s:%s", name, remotePath)
@@ -88,7 +94,7 @@ func handleRunScript(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 	}
 	execArgs = append(execArgs, "--", interpreter, remotePath)
 
-	result, execErr := runMultipass(ctx, defaultTimeout, execArgs...)
+	result, execErr := runMultipass(ctx, timeout, execArgs...)
 
 	// Clean up remote script (best effort)
 	runMultipass(ctx, 10*time.Second, "exec", name, "--", "rm", "-f", remotePath)

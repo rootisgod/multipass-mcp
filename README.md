@@ -58,6 +58,58 @@ Add to your config file:
 }
 ```
 
+## Claude Skill (Optional)
+
+A companion **Claude skill** is included in this repo at [`skill/multipass/`](skill/multipass/). The MCP server gives Claude the *ability* to manage VMs; the skill gives it the *judgment* of when and how — decision trees for resource sizing, cloud-init templates, workflow playbooks, and error recovery patterns.
+
+### Quick Start
+
+**1. Install Multipass** (if you haven't already):
+```bash
+# macOS
+brew install --cask multipass
+
+# Linux (snap)
+sudo snap install multipass
+```
+
+**2. Install the MCP server:**
+```bash
+brew install rootisgod/tap/multipass-mcp
+```
+
+**3. Register the MCP server with Claude Code:**
+```bash
+claude mcp add multipass-mcp -- multipass-mcp
+```
+
+**4. Install the skill:**
+```bash
+claude skill add --url https://github.com/rootisgod/multipass-mcp/tree/main/skill/multipass
+```
+
+**5. Use it:**
+
+Just ask Claude naturally — the skill triggers automatically:
+
+- *"Make me a VM with Docker installed"*
+- *"Set up a dev environment for my Node project"*
+- *"Snapshot my VM before I try something risky"*
+- *"Launch 3 VMs for testing a distributed system"*
+- *"Run my tests in a clean Ubuntu and then destroy it"*
+
+### What the Skill Includes
+
+| Directory | Contents |
+|-----------|----------|
+| `reference/` | MCP tools reference, CLI cheat sheet, cloud-init guide, networking, image catalog |
+| `templates/` | Cloud-init configs for Docker, Kubernetes (microk8s), devtools (Node/Python), LAMP, Python data science |
+| `workflows/` | Step-by-step playbooks for dev environments, snapshot/restore, multi-VM clusters, disposable CI |
+| `scripts/` | Health check, SSH key setup, cleanup utilities |
+| `evals/` | 8 test scenarios for validating skill behavior |
+
+The skill works with or without the MCP server — if the `multipass_*` tools aren't detected, it falls back to `multipass` CLI commands via bash.
+
 ## Resources
 
 Resources provide read-only access to Multipass state. MCP clients can read these URIs to get current information without side effects.

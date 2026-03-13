@@ -1,0 +1,19 @@
+#cloud-config
+package_update: true
+
+packages:
+  - python3
+  - python3-pip
+  - python3-venv
+
+runcmd:
+  # Create a virtual environment for data science work
+  - su - ubuntu -c "python3 -m venv ~/ds-env"
+  # Install data science packages
+  - su - ubuntu -c "~/ds-env/bin/pip install --upgrade pip"
+  - su - ubuntu -c "~/ds-env/bin/pip install jupyter pandas numpy matplotlib scikit-learn"
+  # Create activation shortcut
+  - echo 'alias ds="source ~/ds-env/bin/activate"' >> /home/ubuntu/.bashrc
+  - chown ubuntu:ubuntu /home/ubuntu/.bashrc
+  # Signal completion
+  - touch /var/run/cloud-init-complete

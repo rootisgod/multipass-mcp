@@ -1,0 +1,53 @@
+{
+  "skill_name": "multipass",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Set up a dev VM for a Node.js project. I have my project at ~/Code/my-node-app and I need Node 20, npm, and git installed.",
+      "expected_output": "Launches a VM with appropriate resources (4 CPUs, 8G RAM, 20G disk), uses cloud-init-devtools.yaml or installs Node via exec, mounts ~/Code/my-node-app into the VM, verifies Node and git are installed, reports IP and connection info.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I want to snapshot my dev VM called dev-api before I try installing a new database. I'm not sure if it'll break things.",
+      "expected_output": "Stops the dev-api instance, creates a snapshot with a descriptive name like 'before-db-install' and a meaningful comment, restarts the instance, tells the user they can proceed and how to rollback if needed.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I broke something in my VM dev-api after trying to install CockroachDB. Can you roll it back to the snapshot we made?",
+      "expected_output": "Lists snapshots for dev-api to identify the right one, confirms with the user which snapshot to restore, stops the instance, restores with --destructive flag, starts the instance back up, verifies it's running.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "I need to test my distributed system. Can you launch 3 VMs that can talk to each other? They just need basic Ubuntu.",
+      "expected_output": "Launches 3 VMs with sequential names (node-1, node-2, node-3) with modest resources (2 CPUs, 2G RAM each), waits for all to be running, collects IP addresses, verifies inter-node connectivity with ping, presents IP table to user.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Run my pytest suite in a clean Ubuntu environment. The tests are in ~/Code/my-python-project. After they finish, grab the coverage report and then destroy the VM completely.",
+      "expected_output": "Launches a fresh VM with a disposable name, installs Python and pytest (or uses cloud-init), mounts or transfers the project, runs pytest with coverage, transfers coverage report back to host, deletes and purges the VM, reports test results.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "What VMs do I have running right now?",
+      "expected_output": "Uses multipass_list_instances (MCP) or 'multipass list' (CLI) to show all instances with their names, states, IP addresses, and images. Presents the information clearly.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "My VM test-server can't seem to reach the internet. apt-get update is failing. Can you help me figure out what's wrong?",
+      "expected_output": "Runs health check script or manual diagnostics (ping, DNS resolution, apt-get update) inside the VM, checks networking configuration, refers to networking reference, suggests fixes based on findings (DNS config, network interface issues, etc.).",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "Set up a VM with Docker installed. I want to be able to run containers right away.",
+      "expected_output": "Launches a VM using the cloud-init-docker.yaml template with appropriate resources (4 CPUs, 8G RAM, 20G disk), waits for cloud-init to complete, verifies Docker is installed and working (docker version, docker run hello-world), reports IP and connection info.",
+      "files": []
+    }
+  ]
+}

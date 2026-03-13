@@ -1,0 +1,24 @@
+#cloud-config
+package_update: true
+
+packages:
+  - apache2
+  - mysql-server
+  - php
+  - php-mysql
+  - php-curl
+  - php-xml
+  - libapache2-mod-php
+
+runcmd:
+  # Enable and start Apache
+  - systemctl enable apache2
+  - systemctl start apache2
+  # Enable and start MySQL
+  - systemctl enable mysql
+  - systemctl start mysql
+  # Create a simple test page
+  - echo "<?php phpinfo(); ?>" > /var/www/html/info.php
+  - chown www-data:www-data /var/www/html/info.php
+  # Signal completion
+  - touch /var/run/cloud-init-complete

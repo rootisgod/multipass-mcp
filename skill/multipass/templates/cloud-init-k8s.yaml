@@ -1,0 +1,21 @@
+#cloud-config
+package_update: true
+
+runcmd:
+  # Install microk8s via snap
+  - snap install microk8s --classic
+  # Add ubuntu user to microk8s group
+  - usermod -aG microk8s ubuntu
+  # Create .kube directory for ubuntu user
+  - mkdir -p /home/ubuntu/.kube
+  - chown -R ubuntu:ubuntu /home/ubuntu/.kube
+  # Wait for microk8s to be ready
+  - microk8s status --wait-ready
+  # Enable essential addons
+  - microk8s enable dns
+  - microk8s enable storage
+  # Create kubectl alias config
+  - microk8s config > /home/ubuntu/.kube/config
+  - chown ubuntu:ubuntu /home/ubuntu/.kube/config
+  # Signal completion
+  - touch /var/run/cloud-init-complete

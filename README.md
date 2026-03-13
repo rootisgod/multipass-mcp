@@ -23,12 +23,12 @@ go install github.com/rootisgod/multipass-mcp@latest
 
 ### Download binary
 
-Download the latest binary for your platform from the [releases page](https://github.com/iainmckee/multipass-mcp/releases).
+Download the latest binary for your platform from the [releases page](https://github.com/rootisgod/multipass-mcp/releases).
 
 ### Build from source
 
 ```bash
-git clone https://github.com/iainmckee/multipass-mcp.git
+git clone https://github.com/rootisgod/multipass-mcp.git
 cd multipass-mcp
 CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --always)" -o multipass-mcp .
 ```

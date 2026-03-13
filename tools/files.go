@@ -10,7 +10,7 @@ import (
 func RegisterFileTools(s *server.MCPServer) {
 	s.AddTool(
 		mcp.NewTool("multipass_transfer",
-			mcp.WithDescription("Transfer files between host and a Multipass instance.\n\nUse <n>:<path> syntax for instance paths (e.g. \"my-vm:/home/ubuntu/file.txt\").\nUse a plain path for host paths (e.g. \"/tmp/file.txt\")."),
+			mcp.WithDescription("Transfer files between host and a Multipass instance.\n\nUse <instance>:<path> syntax for instance paths (e.g. \"my-vm:/home/ubuntu/file.txt\").\nUse a plain path for host paths (e.g. \"/tmp/file.txt\")."),
 			mcp.WithString("source", mcp.Required(), mcp.Description("Source path (host path or instance:path).")),
 			mcp.WithString("destination", mcp.Required(), mcp.Description("Destination path (host path or instance:path).")),
 			mcp.WithBoolean("recursive", mcp.Description("Transfer directories recursively.")),

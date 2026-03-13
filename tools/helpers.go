@@ -17,6 +17,10 @@ const (
 // runMultipass executes a multipass CLI command and returns stdout.
 // Returns an error with stderr content on non-zero exit.
 func runMultipass(ctx context.Context, timeout time.Duration, args ...string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("multipass: no command specified")
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 

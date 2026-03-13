@@ -96,8 +96,10 @@ func handleRunScript(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToo
 
 	result, execErr := runMultipass(ctx, timeout, execArgs...)
 
-	// Clean up remote script (best effort)
-	runMultipass(ctx, 10*time.Second, "exec", name, "--", "rm", "-f", remotePath)
+	// Clean up remote script (best effort, use background context in case parent was cancelled)
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cleanupCancel()
+	runMultipass(cleanupCtx, 10*time.Second, "exec", name, "--", "rm", "-f", remotePath)
 
 	if execErr != nil {
 		return mcp.NewToolResultError(execErr.Error()), nil
@@ -120,6 +122,9 @@ func handleExecCommand(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	commandSlice, ok := commandRaw.([]any)
 	if !ok {
 		return mcp.NewToolResultError("command must be a list of strings"), nil
+	}
+	if len(commandSlice) == 0 {
+		return mcp.NewToolResultError("command must contain at least one element"), nil
 	}
 
 	cmdArgs := []string{"exec", name}

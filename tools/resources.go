@@ -3,11 +3,14 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+var instanceURIPattern = regexp.MustCompile(`^multipass://instance/(.+)$`)
 
 func RegisterResources(s *server.MCPServer) {
 	// Static resources
@@ -97,10 +100,9 @@ func handleListAliases(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.
 }
 
 func handleGetInstance(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	re := regexp.MustCompile(`multipass://instance/(.+)`)
-	matches := re.FindStringSubmatch(req.Params.URI)
+	matches := instanceURIPattern.FindStringSubmatch(req.Params.URI)
 	if len(matches) < 2 {
-		return nil, nil
+		return nil, fmt.Errorf("invalid instance URI: %s", req.Params.URI)
 	}
 	name := matches[1]
 

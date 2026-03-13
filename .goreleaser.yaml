@@ -67,6 +67,6 @@ brews:
     description: "MCP server for managing Multipass virtual machines"
     license: "MIT"
     test: |
-      system "#{bin}/multipass-mcp", "--help"
+      system "#{bin}/multipass-mcp", "--version"
     install: |
       bin.install "multipass-mcp"

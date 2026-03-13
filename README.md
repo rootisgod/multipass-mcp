@@ -15,6 +15,12 @@ An MCP server for managing [Multipass](https://multipass.run/) virtual machines 
 brew install iainmckee/tap/multipass-mcp
 ```
 
+### Go install
+
+```bash
+go install github.com/rootisgod/multipass-mcp@latest
+```
+
 ### Download binary
 
 Download the latest binary for your platform from the [releases page](https://github.com/iainmckee/multipass-mcp/releases).
@@ -24,7 +30,7 @@ Download the latest binary for your platform from the [releases page](https://gi
 ```bash
 git clone https://github.com/iainmckee/multipass-mcp.git
 cd multipass-mcp
-CGO_ENABLED=0 go build -o multipass-mcp .
+CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --always)" -o multipass-mcp .
 ```
 
 ## Configuration
@@ -67,25 +73,28 @@ Resources provide read-only access to Multipass state. MCP clients can read thes
 
 ## Tools
 
+All tool names are prefixed with `multipass_` to avoid conflicts when used alongside other MCP servers.
+
 ### Instance Lifecycle
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `launch` | Create and start a new VM | `image`, `name`, `cpus`, `disk`, `memory`, `cloud_init`, `network`, `mount` |
-| `start` | Start a stopped instance | `name` (or `"all"`) |
-| `stop` | Stop a running instance | `name` (or `"all"`), `force` |
-| `restart` | Restart an instance | `name` (or `"all"`) |
-| `suspend` | Suspend an instance to disk | `name` (or `"all"`) |
-| `delete` | Move an instance to trash | `name` (or `"all"`), `purge` |
-| `recover` | Restore a trashed instance | `name` (or `"all"`) |
+| `multipass_launch` | Create and start a new VM | `image`, `name`, `cpus`, `disk`, `memory`, `cloud_init`, `network`, `mount` |
+| `multipass_start` | Start a stopped instance | `name` (or `"all"`) |
+| `multipass_stop` | Stop a running instance | `name` (or `"all"`), `force` |
+| `multipass_restart` | Restart an instance | `name` (or `"all"`) |
+| `multipass_suspend` | Suspend an instance to disk | `name` (or `"all"`) |
+| `multipass_delete` | Move an instance to trash | `name` (or `"all"`), `purge` |
+| `multipass_recover` | Restore a trashed instance | `name` (or `"all"`) |
 
-For `start`, `stop`, `restart`, `suspend`, `delete`, and `recover`, pass `name="all"` to operate on every instance.
+For `multipass_start`, `multipass_stop`, `multipass_restart`, `multipass_suspend`, `multipass_delete`, and `multipass_recover`, pass `name="all"` to operate on every instance.
 
 ### Command Execution
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `exec_command` | Run a command inside an instance | `name`, `command` (list of strings), `working_directory` |
+| `multipass_exec_command` | Run a command inside an instance | `name`, `command` (list of strings), `working_directory` |
+| `multipass_run_script` | Run a multi-line script inside an instance | `name`, `script`, `interpreter`, `working_directory` |
 
 The `command` parameter takes a list of strings (e.g. `["ls", "-la", "/tmp"]`) rather than a shell string. This avoids shell injection and ensures each argument is passed correctly.
 
@@ -93,9 +102,9 @@ The `command` parameter takes a list of strings (e.g. `["ls", "-la", "/tmp"]`) r
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `transfer` | Copy files between host and instance | `source`, `destination`, `recursive` |
-| `mount_directory` | Mount a host directory inside an instance | `source`, `target`, `uid_map`, `gid_map`, `mount_type` |
-| `umount_directory` | Unmount a mounted directory | `mount_path` |
+| `multipass_transfer` | Copy files between host and instance | `source`, `destination`, `recursive` |
+| `multipass_mount_directory` | Mount a host directory inside an instance | `source`, `target`, `uid_map`, `gid_map`, `mount_type` |
+| `multipass_umount_directory` | Unmount a mounted directory | `mount_path` |
 
 File paths use `<instance>:<path>` syntax for instance-side paths:
 - Host to instance: `source="/tmp/file.txt"`, `destination="my-vm:/home/ubuntu/file.txt"`
@@ -105,18 +114,36 @@ File paths use `<instance>:<path>` syntax for instance-side paths:
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `snapshot` | Create a snapshot of an instance | `instance`, `name`, `comment` |
-| `restore` | Restore an instance to a snapshot | `instance`, `snapshot`, `destructive` |
-| `clone` | Create an independent copy of an instance | `source_name`, `name` |
+| `multipass_snapshot` | Create a snapshot of an instance | `instance`, `name`, `comment` |
+| `multipass_restore` | Restore an instance to a snapshot | `instance`, `snapshot`, `destructive` |
+| `multipass_clone` | Create an independent copy of an instance | `source_name`, `name` |
 
 > **Important:** The instance must be **stopped** before taking a snapshot, restoring, or cloning. The server will return an error if the instance is running.
+
+### Information & Queries
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `multipass_list_instances` | List all instances with state and IPs | *(none)* |
+| `multipass_get_instance` | Get detailed info for one instance | `name` |
+| `multipass_find_images` | List available images to launch | *(none)* |
+| `multipass_list_networks` | List host network interfaces | *(none)* |
+| `multipass_list_snapshots` | List snapshots for an instance | `name` |
+| `multipass_get_version` | Get Multipass version info | *(none)* |
+| `multipass_list_aliases` | List command aliases | *(none)* |
+| `multipass_list_mounts` | List active mounts for an instance | `name` |
+| `multipass_list_deleted` | List trashed instances | *(none)* |
+| `multipass_instance_exists` | Check if an instance exists | `name` |
+| `multipass_get_bridged_network` | Get the bridged network interface | *(none)* |
+| `multipass_disk_usage_check` | Check disk usage with threshold | `name`, `warn_percent` |
+| `multipass_wait_until_running` | Poll until instance is running | `name`, `timeout` |
 
 ### Configuration
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `get_config` | Read Multipass settings | `key` (omit for all keys) |
-| `set_config` | Change a setting | `key`, `value` |
+| `multipass_get_config` | Read Multipass settings | `key` (omit for all keys) |
+| `multipass_set_config` | Change a setting | `key`, `value` |
 
 Common config keys:
 - `local.driver` — VM backend (`qemu`, `virtualbox`, etc.)
@@ -127,8 +154,19 @@ Common config keys:
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `purge` | Permanently delete all trashed instances | *(none)* |
-| `authenticate` | Authenticate with the Multipass daemon | `passphrase` |
+| `multipass_purge` | Permanently delete all trashed instances | *(none)* |
+| `multipass_authenticate` | Authenticate with the Multipass daemon | `passphrase` |
+
+## Tool Annotations
+
+All tools include MCP tool annotations to help clients understand their behavior:
+
+| Annotation | Meaning |
+|------------|---------|
+| `readOnlyHint: true` | Tool only reads data (all info/query tools) |
+| `destructiveHint: true` | Tool may cause data loss (`multipass_delete`, `multipass_purge`, `multipass_restore`) |
+| `idempotentHint: true` | Repeated calls have no additional effect (e.g. `multipass_start` on a running instance) |
+| `openWorldHint: false` | Tool only interacts with local Multipass, not external services |
 
 ## Example Workflows
 
@@ -137,12 +175,12 @@ Common config keys:
 ```
 You: Launch an Ubuntu 24.04 VM named "dev" with 4 CPUs, 8G memory, and 20G disk
 
-Claude: [calls launch(image="24.04", name="dev", cpus=4, memory="8G", disk="20G")]
+Claude: [calls multipass_launch(image="24.04", name="dev", cpus=4, memory="8G", disk="20G")]
 
 You: Install Node.js in it
 
-Claude: [calls exec_command(name="dev", command=["sudo", "apt-get", "update"])]
-       [calls exec_command(name="dev", command=["sudo", "apt-get", "install", "-y", "nodejs", "npm"])]
+Claude: [calls multipass_exec_command(name="dev", command=["sudo", "apt-get", "update"])]
+       [calls multipass_exec_command(name="dev", command=["sudo", "apt-get", "install", "-y", "nodejs", "npm"])]
 ```
 
 ### Snapshot and restore workflow
@@ -150,14 +188,14 @@ Claude: [calls exec_command(name="dev", command=["sudo", "apt-get", "update"])]
 ```
 You: Snapshot the dev VM before I make risky changes
 
-Claude: [calls stop(name="dev")]
-       [calls snapshot(instance="dev", name="before-changes", comment="Clean state before experiment")]
+Claude: [calls multipass_stop(name="dev")]
+       [calls multipass_snapshot(instance="dev", name="before-changes", comment="Clean state before experiment")]
 
 You: Something broke, roll it back
 
-Claude: [calls stop(name="dev")]
-       [calls restore(instance="dev", snapshot="before-changes", destructive=True)]
-       [calls start(name="dev")]
+Claude: [calls multipass_stop(name="dev")]
+       [calls multipass_restore(instance="dev", snapshot="before-changes", destructive=True)]
+       [calls multipass_start(name="dev")]
 ```
 
 ### Transfer files
@@ -165,8 +203,8 @@ Claude: [calls stop(name="dev")]
 ```
 You: Copy my local config to the VM
 
-Claude: [calls transfer(source="/Users/me/.config/app/config.yaml",
-                        destination="dev:/home/ubuntu/.config/app/config.yaml")]
+Claude: [calls multipass_transfer(source="/Users/me/.config/app/config.yaml",
+                                  destination="dev:/home/ubuntu/.config/app/config.yaml")]
 ```
 
 ### Mount a project directory
@@ -174,8 +212,8 @@ Claude: [calls transfer(source="/Users/me/.config/app/config.yaml",
 ```
 You: Mount my project folder into the VM
 
-Claude: [calls mount_directory(source="/Users/me/projects/myapp",
-                               target="dev:/home/ubuntu/myapp")]
+Claude: [calls multipass_mount_directory(source="/Users/me/projects/myapp",
+                                         target="dev:/home/ubuntu/myapp")]
 ```
 
 ### Clone a template VM
@@ -183,16 +221,17 @@ Claude: [calls mount_directory(source="/Users/me/projects/myapp",
 ```
 You: Clone the dev VM so I have a clean copy for testing
 
-Claude: [calls stop(name="dev")]
-       [calls clone(source_name="dev", name="dev-test")]
-       [calls start(name="dev")]
-       [calls start(name="dev-test")]
+Claude: [calls multipass_stop(name="dev")]
+       [calls multipass_clone(source_name="dev", name="dev-test")]
+       [calls multipass_start(name="dev")]
+       [calls multipass_start(name="dev-test")]
 ```
 
 ## Design Notes
 
-- **No shell injection** — `exec_command` takes an array of strings (e.g. `["ls", "-la"]`), not a shell string. Arguments are passed directly to the subprocess.
-- **Timeouts** — Most commands time out after 300s. `launch` defaults to 600s since image downloads can be slow.
+- **No shell injection** — `multipass_exec_command` takes an array of strings (e.g. `["ls", "-la"]`), not a shell string. Arguments are passed directly to the subprocess.
+- **Timeouts** — Most commands time out after 300s. `multipass_launch` defaults to 600s since image downloads can be slow.
 - **Error handling** — CLI errors are returned with the stderr output, which MCP surfaces to the AI assistant automatically.
 - **Stdio transport** — The server communicates over stdin/stdout using the MCP stdio protocol. Nothing is printed to stdout except MCP messages.
 - **Static binary** — Built with `CGO_ENABLED=0` for a self-contained binary with no runtime dependencies.
+- **Version injection** — The version is set at build time via `-ldflags "-X main.version=..."`. Defaults to `dev` for local builds.

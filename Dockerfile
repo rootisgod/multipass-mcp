@@ -1,7 +1,10 @@
-FROM python:3.12-slim
-
+FROM golang:1.23-alpine AS build
 WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN pip install --no-cache-dir .
+RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o multipass-mcp .
 
+FROM alpine:latest
+COPY --from=build /app/multipass-mcp /usr/local/bin/
 ENTRYPOINT ["multipass-mcp"]

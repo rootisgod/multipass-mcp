@@ -9,18 +9,28 @@ import (
 
 func RegisterConfigTools(s *server.MCPServer) {
 	s.AddTool(
-		mcp.NewTool("get_config",
+		mcp.NewTool("multipass_get_config",
 			mcp.WithDescription("Get Multipass configuration settings."),
 			mcp.WithString("key", mcp.Description("Specific setting key (e.g. \"local.driver\"). Omit to get all settings.")),
+			mcp.WithTitleAnnotation("Multipass: Get Config"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleGetConfig,
 	)
 
 	s.AddTool(
-		mcp.NewTool("set_config",
+		mcp.NewTool("multipass_set_config",
 			mcp.WithDescription("Set a Multipass configuration value."),
 			mcp.WithString("key", mcp.Required(), mcp.Description("Setting key (e.g. \"local.driver\").")),
 			mcp.WithString("value", mcp.Required(), mcp.Description("New value to set.")),
+			mcp.WithTitleAnnotation("Multipass: Set Config"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleSetConfig,
 	)

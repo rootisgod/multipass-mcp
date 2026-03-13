@@ -13,100 +13,165 @@ import (
 
 func RegisterInfoTools(s *server.MCPServer) {
 	s.AddTool(
-		mcp.NewTool("list_instances",
+		mcp.NewTool("multipass_list_instances",
 			mcp.WithDescription("List all Multipass instances with their state, IP addresses, and image info."),
+			mcp.WithTitleAnnotation("Multipass: List Instances"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleListInstancesTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("get_instance",
+		mcp.NewTool("multipass_get_instance",
 			mcp.WithDescription("Get detailed information about a specific Multipass instance including CPU, memory, disk usage, mounts, and snapshots."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
+			mcp.WithTitleAnnotation("Multipass: Get Instance Details"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleGetInstanceTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("find_images",
+		mcp.NewTool("multipass_find_images",
 			mcp.WithDescription("List available Multipass images that can be launched (Ubuntu releases, blueprints, etc)."),
+			mcp.WithTitleAnnotation("Multipass: Find Images"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleFindImagesTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("list_networks",
+		mcp.NewTool("multipass_list_networks",
 			mcp.WithDescription("List host network interfaces available for Multipass instances."),
+			mcp.WithTitleAnnotation("Multipass: List Networks"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleListNetworksTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("list_snapshots",
+		mcp.NewTool("multipass_list_snapshots",
 			mcp.WithDescription("List all snapshots for a specific Multipass instance."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
+			mcp.WithTitleAnnotation("Multipass: List Snapshots"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleListSnapshotsTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("get_version",
+		mcp.NewTool("multipass_get_version",
 			mcp.WithDescription("Get Multipass version and daemon information."),
+			mcp.WithTitleAnnotation("Multipass: Get Version"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleGetVersionTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("list_aliases",
+		mcp.NewTool("multipass_list_aliases",
 			mcp.WithDescription("List configured Multipass command aliases."),
+			mcp.WithTitleAnnotation("Multipass: List Aliases"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleListAliasesTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("list_mounts",
+		mcp.NewTool("multipass_list_mounts",
 			mcp.WithDescription("List active mounts for a Multipass instance. Returns mount source, target, UID/GID mappings."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
+			mcp.WithTitleAnnotation("Multipass: List Mounts"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleListMountsTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("list_deleted",
+		mcp.NewTool("multipass_list_deleted",
 			mcp.WithDescription("List only deleted (trashed) Multipass instances that can be recovered or purged."),
+			mcp.WithTitleAnnotation("Multipass: List Deleted Instances"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleListDeletedTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("instance_exists",
+		mcp.NewTool("multipass_instance_exists",
 			mcp.WithDescription("Check if a Multipass instance exists by name. Returns exists (bool), state, and image. Use before launch to avoid duplicates or before lifecycle commands to verify the target."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name to check.")),
+			mcp.WithTitleAnnotation("Multipass: Check Instance Exists"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleInstanceExistsTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("get_bridged_network",
+		mcp.NewTool("multipass_get_bridged_network",
 			mcp.WithDescription("Get the configured bridged network interface name. Returns the network used when launching with --network bridged."),
+			mcp.WithTitleAnnotation("Multipass: Get Bridged Network"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleGetBridgedNetworkTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("disk_usage_check",
+		mcp.NewTool("multipass_disk_usage_check",
 			mcp.WithDescription("Check disk usage for a Multipass instance. Returns total, used, percentage, and a warning if usage exceeds the threshold."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
 			mcp.WithNumber("warn_percent", mcp.Description("Warning threshold percentage (default 80).")),
+			mcp.WithTitleAnnotation("Multipass: Check Disk Usage"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleDiskUsageCheckTool,
 	)
 
 	s.AddTool(
-		mcp.NewTool("wait_until_running",
+		mcp.NewTool("multipass_wait_until_running",
 			mcp.WithDescription("Wait for a Multipass instance to reach Running state. Polls until the instance is running or timeout is reached. Useful after launch, start, or restart."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
 			mcp.WithNumber("timeout", mcp.Description("Max seconds to wait (default 120).")),
+			mcp.WithTitleAnnotation("Multipass: Wait Until Running"),
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleWaitUntilRunningTool,
 	)
@@ -256,7 +321,7 @@ func handleGetBridgedNetworkTool(ctx context.Context, req mcp.CallToolRequest) (
 	result, err := runMultipass(ctx, defaultTimeout, "get", "local.bridged-network")
 	if err != nil {
 		if strings.Contains(err.Error(), "is not a valid key") || strings.Contains(err.Error(), "not set") {
-			return mcp.NewToolResultText(`{"bridged_network": null, "message": "No bridged network configured. Use set_config to set local.bridged-network."}`), nil
+			return mcp.NewToolResultText(`{"bridged_network": null, "message": "No bridged network configured. Use multipass_set_config to set local.bridged-network."}`), nil
 		}
 		return mcp.NewToolResultError(err.Error()), nil
 	}

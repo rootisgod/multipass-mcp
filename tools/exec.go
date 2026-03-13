@@ -13,18 +13,23 @@ import (
 
 func RegisterExecTools(s *server.MCPServer) {
 	s.AddTool(
-		mcp.NewTool("run_script",
+		mcp.NewTool("multipass_run_script",
 			mcp.WithDescription("Run a multi-line script inside a Multipass instance. The script is transferred to the instance, executed with the specified interpreter, and cleaned up automatically. Use this for complex multi-step operations instead of chaining exec_command calls."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
 			mcp.WithString("script", mcp.Required(), mcp.Description("The script content to execute (multi-line string).")),
 			mcp.WithString("interpreter", mcp.Description("Interpreter to run the script with (default \"bash\"). Examples: \"bash\", \"python3\", \"sh\".")),
 			mcp.WithString("working_directory", mcp.Description("Working directory inside the instance.")),
+			mcp.WithTitleAnnotation("Multipass: Run Script"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleRunScript,
 	)
 
 	s.AddTool(
-		mcp.NewTool("exec_command",
+		mcp.NewTool("multipass_exec_command",
 			mcp.WithDescription("Execute a command inside a Multipass instance."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
 			mcp.WithArray("command",
@@ -33,6 +38,11 @@ func RegisterExecTools(s *server.MCPServer) {
 				mcp.Items(map[string]any{"type": "string"}),
 			),
 			mcp.WithString("working_directory", mcp.Description("Working directory inside the instance.")),
+			mcp.WithTitleAnnotation("Multipass: Execute Command"),
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithIdempotentHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 		),
 		handleExecCommand,
 	)

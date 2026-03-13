@@ -83,10 +83,14 @@ brew install rootisgod/tap/multipass-mcp
 claude mcp add multipass-mcp -- multipass-mcp
 ```
 
-**4. Install the skill:**
+**4. Install the skill** (available to all your projects):
 ```bash
-claude skill add --url https://github.com/rootisgod/multipass-mcp/tree/main/skill/multipass
+git clone https://github.com/rootisgod/multipass-mcp.git /tmp/multipass-mcp
+cp -r /tmp/multipass-mcp/skill/multipass ~/.claude/skills/multipass
+rm -rf /tmp/multipass-mcp
 ```
+
+Or for a single project only, copy into your repo's `.claude/skills/` directory instead.
 
 **5. Use it:**
 

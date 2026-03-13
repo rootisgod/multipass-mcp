@@ -1,0 +1,1404 @@
+From d41457961dec42c50cd1793cf2279dd8d088763d Mon Sep 17 00:00:00 2001
+From: Claude <claude@example.com>
+Date: Fri, 13 Mar 2026 07:07:09 +0000
+Subject: [PATCH] Apply MCP best practices for registry publication
+
+- Prefix all 32 tool names with multipass_ to avoid conflicts with other MCP servers
+- Add MCP tool annotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint) to every tool
+- Add human-readable title annotations (WithTitleAnnotation) to every tool
+- Make version injectable at build time via -ldflags (-X main.version=...)
+- Fix Dockerfile: replace broken Python-based image with multi-stage Go build
+- Remove deprecated _python/ directory and smithery.yaml
+- Add go install instructions to README
+- Update README, CLAUDE.md, and examples to reflect new tool names
+- Document tool annotations in README
+---
+ CLAUDE.md                             |  31 +-
+ Dockerfile                            |   9 +-
+ README.md                             | 115 ++++---
+ _python/pyproject.toml                |  32 --
+ _python/src/multipass_mcp/__init__.py |   0
+ _python/src/multipass_mcp/server.py   | 448 --------------------------
+ main.go                               |   5 +-
+ smithery.yaml                         |  13 -
+ tools/config.go                       |  14 +-
+ tools/exec.go                         |  14 +-
+ tools/files.go                        |  23 +-
+ tools/info.go                         |  93 +++++-
+ tools/instance.go                     |  49 ++-
+ tools/snapshots.go                    |  21 +-
+ tools/system.go                       |  16 +-
+ 15 files changed, 299 insertions(+), 584 deletions(-)
+ delete mode 100644 _python/pyproject.toml
+ delete mode 100644 _python/src/multipass_mcp/__init__.py
+ delete mode 100644 _python/src/multipass_mcp/server.py
+ delete mode 100644 smithery.yaml
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 5d7054a..9d6a675 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -14,18 +14,19 @@ Multipass MCP Server — exposes the Multipass CLI as an MCP server with 32 tool
+ ## Project Structure
+ 
+ ```
+-main.go                     # entrypoint, server setup, tool registration
++main.go                     # entrypoint, server setup, tool registration, version via ldflags
+ tools/
+ ├── helpers.go              # runMultipass/runMultipassJSON subprocess helpers
+-├── instance.go             # launch, start, stop, restart, suspend, delete, recover
+-├── exec.go                 # run_script, exec_command
+-├── files.go                # transfer, mount_directory, umount_directory
+-├── snapshots.go            # snapshot, restore, clone
+-├── config.go               # get_config, set_config
+-├── system.go               # purge, authenticate
+-├── info.go                 # list_instances, get_instance, find_images, list_networks, list_snapshots, get_version, list_aliases, list_mounts, list_deleted, instance_exists, get_bridged_network, disk_usage_check, wait_until_running
++├── instance.go             # multipass_launch, multipass_start, multipass_stop, multipass_restart, multipass_suspend, multipass_delete, multipass_recover
++├── exec.go                 # multipass_run_script, multipass_exec_command
++├── files.go                # multipass_transfer, multipass_mount_directory, multipass_umount_directory
++├── snapshots.go            # multipass_snapshot, multipass_restore, multipass_clone
++├── config.go               # multipass_get_config, multipass_set_config
++├── system.go               # multipass_purge, multipass_authenticate
++├── info.go                 # multipass_list_instances, multipass_get_instance, multipass_find_images, multipass_list_networks, multipass_list_snapshots, multipass_get_version, multipass_list_aliases, multipass_list_mounts, multipass_list_deleted, multipass_instance_exists, multipass_get_bridged_network, multipass_disk_usage_check, multipass_wait_until_running
+ └── resources.go            # 6 resources (5 static + 1 template)
+ go.mod / go.sum             # module dependencies
++Dockerfile                  # multi-stage Go build
+ .goreleaser.yaml            # cross-compile + Cosign signing + Homebrew tap
+ .github/workflows/release.yml  # GitHub Actions release pipeline
+ ```
+@@ -35,16 +36,18 @@ go.mod / go.sum             # module dependencies
+ - `runMultipass(ctx, timeout, args...)` — subprocess helper, returns stdout or error with stderr
+ - `runMultipassJSON(ctx, timeout, args...)` — same but appends `--format json` and parses result
+ - Resources registered via `s.AddResource()` / `s.AddResourceTemplate()`
+-- Tools registered via `s.AddTool(tool, handler)`
++- Tools registered via `s.AddTool(tool, handler)` with `multipass_` prefix
++- All tools include MCP annotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
+ - `name="all"` on lifecycle tools translates to `--all` CLI flag
+-- `exec_command` takes `command: []string` (not a shell string) to prevent injection
+-- Timeouts: 300s default, 600s for `launch`
++- `multipass_exec_command` takes `command: []string` (not a shell string) to prevent injection
++- Timeouts: 300s default, 600s for `multipass_launch`
++- Version injected at build time via `-ldflags "-X main.version=..."`
+ 
+ ## Development Commands
+ 
+ ```bash
+ # Build
+-CGO_ENABLED=0 go build -o multipass-mcp .
++CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --always)" -o multipass-mcp .
+ 
+ # Check
+ go vet ./...
+@@ -59,11 +62,11 @@ claude mcp add multipass-mcp -- /path/to/multipass-mcp
+ 
+ ## Verified Working
+ 
+-End-to-end tested: launch VM, install packages via exec_command, deploy files, delete+purge. All 32 tools and 6 resources confirmed registered (5 static + 1 template).
++End-to-end tested: launch VM, install packages via multipass_exec_command, deploy files, delete+purge. All 32 tools and 6 resources confirmed registered (5 static + 1 template).
+ 
+ ## Notes
+ 
+-- `exec_command` can run complex shell commands via `["bash", "-c", "..."]`
++- `multipass_exec_command` can run complex shell commands via `["bash", "-c", "..."]`
+ - CLI spinner/escape codes appear in tool output but don't affect functionality
+ - Empty string result from tools (e.g. delete, mount) means success
+ - Ubuntu 24.04 (Noble) is the current default LTS image on arm64
+diff --git a/Dockerfile b/Dockerfile
+index 3830e01..cb79b47 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1,7 +1,10 @@
+-FROM python:3.12-slim
+-
++FROM golang:1.23-alpine AS build
+ WORKDIR /app
++COPY go.mod go.sum ./
++RUN go mod download
+ COPY . .
+-RUN pip install --no-cache-dir .
++RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o multipass-mcp .
+ 
++FROM alpine:latest
++COPY --from=build /app/multipass-mcp /usr/local/bin/
+ ENTRYPOINT ["multipass-mcp"]
+diff --git a/README.md b/README.md
+index 64bffba..3b454db 100644
+--- a/README.md
++++ b/README.md
+@@ -15,6 +15,12 @@ An MCP server for managing [Multipass](https://multipass.run/) virtual machines
+ brew install rootisgod/tap/multipass-mcp
+ ```
+ 
++### Go install
++
++```bash
++go install github.com/rootisgod/multipass-mcp@latest
++```
++
+ ### Download binary
+ 
+ Download the latest binary for your platform from the [releases page](https://github.com/rootisgod/multipass-mcp/releases).
+@@ -24,7 +30,7 @@ Download the latest binary for your platform from the [releases page](https://gi
+ ```bash
+ git clone https://github.com/rootisgod/multipass-mcp.git
+ cd multipass-mcp
+-CGO_ENABLED=0 go build -o multipass-mcp .
++CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --always)" -o multipass-mcp .
+ ```
+ 
+ ## Configuration
+@@ -67,25 +73,28 @@ Resources provide read-only access to Multipass state. MCP clients can read thes
+ 
+ ## Tools
+ 
++All tool names are prefixed with `multipass_` to avoid conflicts when used alongside other MCP servers.
++
+ ### Instance Lifecycle
+ 
+ | Tool | Description | Key Parameters |
+ |------|-------------|----------------|
+-| `launch` | Create and start a new VM | `image`, `name`, `cpus`, `disk`, `memory`, `cloud_init`, `network`, `mount` |
+-| `start` | Start a stopped instance | `name` (or `"all"`) |
+-| `stop` | Stop a running instance | `name` (or `"all"`), `force` |
+-| `restart` | Restart an instance | `name` (or `"all"`) |
+-| `suspend` | Suspend an instance to disk | `name` (or `"all"`) |
+-| `delete` | Move an instance to trash | `name` (or `"all"`), `purge` |
+-| `recover` | Restore a trashed instance | `name` (or `"all"`) |
++| `multipass_launch` | Create and start a new VM | `image`, `name`, `cpus`, `disk`, `memory`, `cloud_init`, `network`, `mount` |
++| `multipass_start` | Start a stopped instance | `name` (or `"all"`) |
++| `multipass_stop` | Stop a running instance | `name` (or `"all"`), `force` |
++| `multipass_restart` | Restart an instance | `name` (or `"all"`) |
++| `multipass_suspend` | Suspend an instance to disk | `name` (or `"all"`) |
++| `multipass_delete` | Move an instance to trash | `name` (or `"all"`), `purge` |
++| `multipass_recover` | Restore a trashed instance | `name` (or `"all"`) |
+ 
+-For `start`, `stop`, `restart`, `suspend`, `delete`, and `recover`, pass `name="all"` to operate on every instance.
++For `multipass_start`, `multipass_stop`, `multipass_restart`, `multipass_suspend`, `multipass_delete`, and `multipass_recover`, pass `name="all"` to operate on every instance.
+ 
+ ### Command Execution
+ 
+ | Tool | Description | Key Parameters |
+ |------|-------------|----------------|
+-| `exec_command` | Run a command inside an instance | `name`, `command` (list of strings), `working_directory` |
++| `multipass_exec_command` | Run a command inside an instance | `name`, `command` (list of strings), `working_directory` |
++| `multipass_run_script` | Run a multi-line script inside an instance | `name`, `script`, `interpreter`, `working_directory` |
+ 
+ The `command` parameter takes a list of strings (e.g. `["ls", "-la", "/tmp"]`) rather than a shell string. This avoids shell injection and ensures each argument is passed correctly.
+ 
+@@ -93,9 +102,9 @@ The `command` parameter takes a list of strings (e.g. `["ls", "-la", "/tmp"]`) r
+ 
+ | Tool | Description | Key Parameters |
+ |------|-------------|----------------|
+-| `transfer` | Copy files between host and instance | `source`, `destination`, `recursive` |
+-| `mount_directory` | Mount a host directory inside an instance | `source`, `target`, `uid_map`, `gid_map`, `mount_type` |
+-| `umount_directory` | Unmount a mounted directory | `mount_path` |
++| `multipass_transfer` | Copy files between host and instance | `source`, `destination`, `recursive` |
++| `multipass_mount_directory` | Mount a host directory inside an instance | `source`, `target`, `uid_map`, `gid_map`, `mount_type` |
++| `multipass_umount_directory` | Unmount a mounted directory | `mount_path` |
+ 
+ File paths use `<instance>:<path>` syntax for instance-side paths:
+ - Host to instance: `source="/tmp/file.txt"`, `destination="my-vm:/home/ubuntu/file.txt"`
+@@ -105,18 +114,36 @@ File paths use `<instance>:<path>` syntax for instance-side paths:
+ 
+ | Tool | Description | Key Parameters |
+ |------|-------------|----------------|
+-| `snapshot` | Create a snapshot of an instance | `instance`, `name`, `comment` |
+-| `restore` | Restore an instance to a snapshot | `instance`, `snapshot`, `destructive` |
+-| `clone` | Create an independent copy of an instance | `source_name`, `name` |
++| `multipass_snapshot` | Create a snapshot of an instance | `instance`, `name`, `comment` |
++| `multipass_restore` | Restore an instance to a snapshot | `instance`, `snapshot`, `destructive` |
++| `multipass_clone` | Create an independent copy of an instance | `source_name`, `name` |
+ 
+ > **Important:** The instance must be **stopped** before taking a snapshot, restoring, or cloning. The server will return an error if the instance is running.
+ 
++### Information & Queries
++
++| Tool | Description | Key Parameters |
++|------|-------------|----------------|
++| `multipass_list_instances` | List all instances with state and IPs | *(none)* |
++| `multipass_get_instance` | Get detailed info for one instance | `name` |
++| `multipass_find_images` | List available images to launch | *(none)* |
++| `multipass_list_networks` | List host network interfaces | *(none)* |
++| `multipass_list_snapshots` | List snapshots for an instance | `name` |
++| `multipass_get_version` | Get Multipass version info | *(none)* |
++| `multipass_list_aliases` | List command aliases | *(none)* |
++| `multipass_list_mounts` | List active mounts for an instance | `name` |
++| `multipass_list_deleted` | List trashed instances | *(none)* |
++| `multipass_instance_exists` | Check if an instance exists | `name` |
++| `multipass_get_bridged_network` | Get the bridged network interface | *(none)* |
++| `multipass_disk_usage_check` | Check disk usage with threshold | `name`, `warn_percent` |
++| `multipass_wait_until_running` | Poll until instance is running | `name`, `timeout` |
++
+ ### Configuration
+ 
+ | Tool | Description | Key Parameters |
+ |------|-------------|----------------|
+-| `get_config` | Read Multipass settings | `key` (omit for all keys) |
+-| `set_config` | Change a setting | `key`, `value` |
++| `multipass_get_config` | Read Multipass settings | `key` (omit for all keys) |
++| `multipass_set_config` | Change a setting | `key`, `value` |
+ 
+ Common config keys:
+ - `local.driver` — VM backend (`qemu`, `virtualbox`, etc.)
+@@ -127,8 +154,19 @@ Common config keys:
+ 
+ | Tool | Description | Key Parameters |
+ |------|-------------|----------------|
+-| `purge` | Permanently delete all trashed instances | *(none)* |
+-| `authenticate` | Authenticate with the Multipass daemon | `passphrase` |
++| `multipass_purge` | Permanently delete all trashed instances | *(none)* |
++| `multipass_authenticate` | Authenticate with the Multipass daemon | `passphrase` |
++
++## Tool Annotations
++
++All tools include MCP tool annotations to help clients understand their behavior:
++
++| Annotation | Meaning |
++|------------|---------|
++| `readOnlyHint: true` | Tool only reads data (all info/query tools) |
++| `destructiveHint: true` | Tool may cause data loss (`multipass_delete`, `multipass_purge`, `multipass_restore`) |
++| `idempotentHint: true` | Repeated calls have no additional effect (e.g. `multipass_start` on a running instance) |
++| `openWorldHint: false` | Tool only interacts with local Multipass, not external services |
+ 
+ ## Example Workflows
+ 
+@@ -137,12 +175,12 @@ Common config keys:
+ ```
+ You: Launch an Ubuntu 24.04 VM named "dev" with 4 CPUs, 8G memory, and 20G disk
+ 
+-Claude: [calls launch(image="24.04", name="dev", cpus=4, memory="8G", disk="20G")]
++Claude: [calls multipass_launch(image="24.04", name="dev", cpus=4, memory="8G", disk="20G")]
+ 
+ You: Install Node.js in it
+ 
+-Claude: [calls exec_command(name="dev", command=["sudo", "apt-get", "update"])]
+-       [calls exec_command(name="dev", command=["sudo", "apt-get", "install", "-y", "nodejs", "npm"])]
++Claude: [calls multipass_exec_command(name="dev", command=["sudo", "apt-get", "update"])]
++       [calls multipass_exec_command(name="dev", command=["sudo", "apt-get", "install", "-y", "nodejs", "npm"])]
+ ```
+ 
+ ### Snapshot and restore workflow
+@@ -150,14 +188,14 @@ Claude: [calls exec_command(name="dev", command=["sudo", "apt-get", "update"])]
+ ```
+ You: Snapshot the dev VM before I make risky changes
+ 
+-Claude: [calls stop(name="dev")]
+-       [calls snapshot(instance="dev", name="before-changes", comment="Clean state before experiment")]
++Claude: [calls multipass_stop(name="dev")]
++       [calls multipass_snapshot(instance="dev", name="before-changes", comment="Clean state before experiment")]
+ 
+ You: Something broke, roll it back
+ 
+-Claude: [calls stop(name="dev")]
+-       [calls restore(instance="dev", snapshot="before-changes", destructive=True)]
+-       [calls start(name="dev")]
++Claude: [calls multipass_stop(name="dev")]
++       [calls multipass_restore(instance="dev", snapshot="before-changes", destructive=True)]
++       [calls multipass_start(name="dev")]
+ ```
+ 
+ ### Transfer files
+@@ -165,8 +203,8 @@ Claude: [calls stop(name="dev")]
+ ```
+ You: Copy my local config to the VM
+ 
+-Claude: [calls transfer(source="/Users/me/.config/app/config.yaml",
+-                        destination="dev:/home/ubuntu/.config/app/config.yaml")]
++Claude: [calls multipass_transfer(source="/Users/me/.config/app/config.yaml",
++                                  destination="dev:/home/ubuntu/.config/app/config.yaml")]
+ ```
+ 
+ ### Mount a project directory
+@@ -174,8 +212,8 @@ Claude: [calls transfer(source="/Users/me/.config/app/config.yaml",
+ ```
+ You: Mount my project folder into the VM
+ 
+-Claude: [calls mount_directory(source="/Users/me/projects/myapp",
+-                               target="dev:/home/ubuntu/myapp")]
++Claude: [calls multipass_mount_directory(source="/Users/me/projects/myapp",
++                                         target="dev:/home/ubuntu/myapp")]
+ ```
+ 
+ ### Clone a template VM
+@@ -183,16 +221,17 @@ Claude: [calls mount_directory(source="/Users/me/projects/myapp",
+ ```
+ You: Clone the dev VM so I have a clean copy for testing
+ 
+-Claude: [calls stop(name="dev")]
+-       [calls clone(source_name="dev", name="dev-test")]
+-       [calls start(name="dev")]
+-       [calls start(name="dev-test")]
++Claude: [calls multipass_stop(name="dev")]
++       [calls multipass_clone(source_name="dev", name="dev-test")]
++       [calls multipass_start(name="dev")]
++       [calls multipass_start(name="dev-test")]
+ ```
+ 
+ ## Design Notes
+ 
+-- **No shell injection** — `exec_command` takes an array of strings (e.g. `["ls", "-la"]`), not a shell string. Arguments are passed directly to the subprocess.
+-- **Timeouts** — Most commands time out after 300s. `launch` defaults to 600s since image downloads can be slow.
++- **No shell injection** — `multipass_exec_command` takes an array of strings (e.g. `["ls", "-la"]`), not a shell string. Arguments are passed directly to the subprocess.
++- **Timeouts** — Most commands time out after 300s. `multipass_launch` defaults to 600s since image downloads can be slow.
+ - **Error handling** — CLI errors are returned with the stderr output, which MCP surfaces to the AI assistant automatically.
+ - **Stdio transport** — The server communicates over stdin/stdout using the MCP stdio protocol. Nothing is printed to stdout except MCP messages.
+ - **Static binary** — Built with `CGO_ENABLED=0` for a self-contained binary with no runtime dependencies.
++- **Version injection** — The version is set at build time via `-ldflags "-X main.version=..."`. Defaults to `dev` for local builds.
+diff --git a/_python/pyproject.toml b/_python/pyproject.toml
+deleted file mode 100644
+index b9491e4..0000000
+--- a/_python/pyproject.toml
++++ /dev/null
+@@ -1,32 +0,0 @@
+-[build-system]
+-requires = ["hatchling"]
+-build-backend = "hatchling.build"
+-
+-[project]
+-name = "multipass-mcp"
+-version = "0.1.0"
+-description = "MCP server for managing Multipass virtual machines"
+-readme = "README.md"
+-license = "MIT"
+-requires-python = ">=3.10"
+-dependencies = ["mcp[cli]"]
+-keywords = ["mcp", "multipass", "virtual-machines", "ubuntu", "ai"]
+-classifiers = [
+-    "Development Status :: 4 - Beta",
+-    "Intended Audience :: Developers",
+-    "License :: OSI Approved :: MIT License",
+-    "Programming Language :: Python :: 3",
+-    "Programming Language :: Python :: 3.10",
+-    "Programming Language :: Python :: 3.11",
+-    "Programming Language :: Python :: 3.12",
+-    "Programming Language :: Python :: 3.13",
+-    "Topic :: System :: Systems Administration",
+-]
+-
+-[project.urls]
+-Homepage = "https://github.com/rootisgod/multipass-mcp"
+-Repository = "https://github.com/rootisgod/multipass-mcp"
+-Issues = "https://github.com/rootisgod/multipass-mcp/issues"
+-
+-[project.scripts]
+-multipass-mcp = "multipass_mcp.server:main"
+diff --git a/_python/src/multipass_mcp/__init__.py b/_python/src/multipass_mcp/__init__.py
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/_python/src/multipass_mcp/server.py b/_python/src/multipass_mcp/server.py
+deleted file mode 100644
+index 9edf759..0000000
+--- a/_python/src/multipass_mcp/server.py
++++ /dev/null
+@@ -1,448 +0,0 @@
+-"""MCP server for managing Multipass virtual machines."""
+-
+-import asyncio
+-import json
+-import sys
+-
+-from mcp.server.fastmcp import FastMCP
+-
+-mcp = FastMCP("multipass")
+-
+-
+-# ---------------------------------------------------------------------------
+-# Helpers
+-# ---------------------------------------------------------------------------
+-
+-
+-async def run_multipass(*args: str, timeout: int = 300) -> str:
+-    """Run a multipass command and return stdout. Raises RuntimeError on failure."""
+-    proc = await asyncio.create_subprocess_exec(
+-        "multipass",
+-        *args,
+-        stdout=asyncio.subprocess.PIPE,
+-        stderr=asyncio.subprocess.PIPE,
+-    )
+-    try:
+-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+-    except asyncio.TimeoutError:
+-        proc.kill()
+-        await proc.communicate()
+-        raise RuntimeError(f"multipass {args[0]} timed out after {timeout}s")
+-    if proc.returncode != 0:
+-        raise RuntimeError(
+-            f"multipass {' '.join(args)} failed (exit {proc.returncode}): "
+-            f"{stderr.decode().strip()}"
+-        )
+-    return stdout.decode().strip()
+-
+-
+-async def run_multipass_json(*args: str, timeout: int = 300) -> dict | list:
+-    """Run a multipass command with --format json and return parsed result."""
+-    result = await run_multipass(*args, "--format", "json", timeout=timeout)
+-    return json.loads(result)
+-
+-
+-# ---------------------------------------------------------------------------
+-# Resources
+-# ---------------------------------------------------------------------------
+-
+-
+-@mcp.resource("multipass://instances")
+-async def list_instances() -> str:
+-    """List all Multipass instances with state, IPs, image, and resource usage."""
+-    data = await run_multipass_json("list")
+-    return json.dumps(data, indent=2)
+-
+-
+-@mcp.resource("multipass://instance/{name}")
+-async def get_instance(name: str) -> str:
+-    """Get detailed information about a specific Multipass instance."""
+-    data = await run_multipass_json("info", name)
+-    return json.dumps(data, indent=2)
+-
+-
+-@mcp.resource("multipass://images")
+-async def list_images() -> str:
+-    """List available Multipass images that can be launched."""
+-    data = await run_multipass_json("find")
+-    return json.dumps(data, indent=2)
+-
+-
+-@mcp.resource("multipass://networks")
+-async def list_networks() -> str:
+-    """List host network devices available for Multipass instances."""
+-    data = await run_multipass_json("networks")
+-    return json.dumps(data, indent=2)
+-
+-
+-@mcp.resource("multipass://version")
+-async def get_version() -> str:
+-    """Get Multipass version information."""
+-    data = await run_multipass_json("version")
+-    return json.dumps(data, indent=2)
+-
+-
+-@mcp.resource("multipass://aliases")
+-async def list_aliases() -> str:
+-    """List configured Multipass command aliases."""
+-    data = await run_multipass_json("aliases")
+-    return json.dumps(data, indent=2)
+-
+-
+-# ---------------------------------------------------------------------------
+-# Tools — Instance Lifecycle
+-# ---------------------------------------------------------------------------
+-
+-
+-@mcp.tool()
+-async def launch(
+-    image: str = "",
+-    name: str = "",
+-    cpus: int | None = None,
+-    disk: str = "",
+-    memory: str = "",
+-    cloud_init: str = "",
+-    network: str = "",
+-    mount: str = "",
+-    timeout: int = 600,
+-) -> str:
+-    """Launch a new Multipass VM instance.
+-
+-    Args:
+-        image: Image to launch (e.g. "22.04", "daily:24.04"). Defaults to latest LTS.
+-        name: Name for the instance. Auto-generated if omitted.
+-        cpus: Number of CPUs to allocate.
+-        disk: Disk size (e.g. "10G", "50G").
+-        memory: Memory size (e.g. "1G", "4G").
+-        cloud_init: Path or URL to cloud-init config file.
+-        network: Network to connect to (from multipass networks).
+-        mount: Host path to mount in the instance (source:target format).
+-        timeout: Timeout in seconds (default 600 — image downloads can be slow).
+-    """
+-    args = ["launch"]
+-    if image:
+-        args.append(image)
+-    if name:
+-        args.extend(["--name", name])
+-    if cpus is not None:
+-        args.extend(["--cpus", str(cpus)])
+-    if disk:
+-        args.extend(["--disk", disk])
+-    if memory:
+-        args.extend(["--memory", memory])
+-    if cloud_init:
+-        args.extend(["--cloud-init", cloud_init])
+-    if network:
+-        args.extend(["--network", network])
+-    if mount:
+-        args.extend(["--mount", mount])
+-    return await run_multipass(*args, timeout=timeout)
+-
+-
+-@mcp.tool()
+-async def start(name: str) -> str:
+-    """Start a stopped Multipass instance.
+-
+-    Args:
+-        name: Instance name, or "all" to start all instances.
+-    """
+-    if name == "all":
+-        return await run_multipass("start", "--all")
+-    return await run_multipass("start", name)
+-
+-
+-@mcp.tool()
+-async def stop(name: str, force: bool = False) -> str:
+-    """Stop a running Multipass instance.
+-
+-    Args:
+-        name: Instance name, or "all" to stop all instances.
+-        force: Force stop without waiting for graceful shutdown.
+-    """
+-    args = ["stop"]
+-    if force:
+-        args.append("--force")
+-    if name == "all":
+-        args.append("--all")
+-    else:
+-        args.append(name)
+-    return await run_multipass(*args)
+-
+-
+-@mcp.tool()
+-async def restart(name: str) -> str:
+-    """Restart a Multipass instance.
+-
+-    Args:
+-        name: Instance name, or "all" to restart all instances.
+-    """
+-    if name == "all":
+-        return await run_multipass("restart", "--all")
+-    return await run_multipass("restart", name)
+-
+-
+-@mcp.tool()
+-async def suspend(name: str) -> str:
+-    """Suspend a running Multipass instance.
+-
+-    Args:
+-        name: Instance name, or "all" to suspend all instances.
+-    """
+-    if name == "all":
+-        return await run_multipass("suspend", "--all")
+-    return await run_multipass("suspend", name)
+-
+-
+-@mcp.tool()
+-async def delete(name: str, purge: bool = False) -> str:
+-    """Delete a Multipass instance (can be recovered unless purged).
+-
+-    Args:
+-        name: Instance name, or "all" to delete all instances.
+-        purge: Permanently delete instead of moving to trash.
+-    """
+-    args = ["delete"]
+-    if purge:
+-        args.append("--purge")
+-    if name == "all":
+-        args.append("--all")
+-    else:
+-        args.append(name)
+-    return await run_multipass(*args)
+-
+-
+-@mcp.tool()
+-async def recover(name: str) -> str:
+-    """Recover a deleted (trashed) Multipass instance.
+-
+-    Args:
+-        name: Instance name, or "all" to recover all deleted instances.
+-    """
+-    if name == "all":
+-        return await run_multipass("recover", "--all")
+-    return await run_multipass("recover", name)
+-
+-
+-# ---------------------------------------------------------------------------
+-# Tools — Execution
+-# ---------------------------------------------------------------------------
+-
+-
+-@mcp.tool()
+-async def exec_command(
+-    name: str,
+-    command: list[str],
+-    working_directory: str = "",
+-) -> str:
+-    """Execute a command inside a Multipass instance.
+-
+-    Args:
+-        name: Instance name.
+-        command: Command and arguments as a list (e.g. ["ls", "-la", "/tmp"]).
+-        working_directory: Working directory inside the instance.
+-    """
+-    args = ["exec", name]
+-    if working_directory:
+-        args.extend(["--working-directory", working_directory])
+-    args.append("--")
+-    args.extend(command)
+-    return await run_multipass(*args)
+-
+-
+-# ---------------------------------------------------------------------------
+-# Tools — File Operations
+-# ---------------------------------------------------------------------------
+-
+-
+-@mcp.tool()
+-async def transfer(
+-    source: str,
+-    destination: str,
+-    recursive: bool = False,
+-) -> str:
+-    """Transfer files between host and a Multipass instance.
+-
+-    Use <name>:<path> syntax for instance paths (e.g. "my-vm:/home/ubuntu/file.txt").
+-    Use a plain path for host paths (e.g. "/tmp/file.txt").
+-
+-    Args:
+-        source: Source path (host path or instance:path).
+-        destination: Destination path (host path or instance:path).
+-        recursive: Transfer directories recursively.
+-    """
+-    args = ["transfer"]
+-    if recursive:
+-        args.append("--recursive")
+-    args.extend([source, destination])
+-    return await run_multipass(*args)
+-
+-
+-@mcp.tool()
+-async def mount_directory(
+-    source: str,
+-    target: str,
+-    uid_map: str = "",
+-    gid_map: str = "",
+-    mount_type: str = "",
+-) -> str:
+-    """Mount a host directory inside a Multipass instance.
+-
+-    Args:
+-        source: Host directory path to mount.
+-        target: Mount point in instance:path format (e.g. "my-vm:/mnt/data").
+-        uid_map: UID mapping in host:instance format (e.g. "1000:0").
+-        gid_map: GID mapping in host:instance format (e.g. "1000:0").
+-        mount_type: Mount type: "classic" or "native".
+-    """
+-    args = ["mount", source, target]
+-    if uid_map:
+-        args.extend(["--uid-map", uid_map])
+-    if gid_map:
+-        args.extend(["--gid-map", gid_map])
+-    if mount_type:
+-        args.extend(["--type", mount_type])
+-    return await run_multipass(*args)
+-
+-
+-@mcp.tool()
+-async def umount_directory(mount_path: str) -> str:
+-    """Unmount a directory from a Multipass instance.
+-
+-    Args:
+-        mount_path: Mount point to remove (instance:path format or host path).
+-    """
+-    return await run_multipass("umount", mount_path)
+-
+-
+-# ---------------------------------------------------------------------------
+-# Tools — Snapshots
+-# ---------------------------------------------------------------------------
+-
+-
+-@mcp.tool()
+-async def snapshot(
+-    instance: str,
+-    name: str = "",
+-    comment: str = "",
+-) -> str:
+-    """Create a snapshot of a stopped Multipass instance.
+-
+-    The instance must be stopped before taking a snapshot.
+-
+-    Args:
+-        instance: Instance name.
+-        name: Snapshot name. Auto-generated if omitted.
+-        comment: Description or comment for the snapshot.
+-    """
+-    args = ["snapshot", instance]
+-    if name:
+-        args.extend(["--name", name])
+-    if comment:
+-        args.extend(["--comment", comment])
+-    return await run_multipass(*args)
+-
+-
+-@mcp.tool()
+-async def restore(
+-    instance: str,
+-    snapshot: str,
+-    destructive: bool = False,
+-) -> str:
+-    """Restore a Multipass instance to a snapshot.
+-
+-    The instance must be stopped. Use destructive=True to discard current state.
+-
+-    Args:
+-        instance: Instance name.
+-        snapshot: Snapshot name to restore to.
+-        destructive: Discard current instance state (required if state changed since snapshot).
+-    """
+-    args = ["restore", f"{instance}.{snapshot}"]
+-    if destructive:
+-        args.append("--destructive")
+-    return await run_multipass(*args)
+-
+-
+-@mcp.tool()
+-async def clone(source_name: str, name: str = "") -> str:
+-    """Clone a stopped Multipass instance into an independent copy.
+-
+-    The source instance must be stopped.
+-
+-    Args:
+-        source_name: Name of the instance to clone.
+-        name: Name for the new cloned instance. Auto-generated if omitted.
+-    """
+-    args = ["clone", source_name]
+-    if name:
+-        args.extend(["--name", name])
+-    return await run_multipass(*args)
+-
+-
+-# ---------------------------------------------------------------------------
+-# Tools — Configuration
+-# ---------------------------------------------------------------------------
+-
+-
+-@mcp.tool()
+-async def get_config(key: str = "") -> str:
+-    """Get Multipass configuration settings.
+-
+-    Args:
+-        key: Specific setting key (e.g. "local.driver"). Omit to get all settings.
+-    """
+-    args = ["get"]
+-    if key:
+-        args.append(key)
+-    else:
+-        args.append("--keys")
+-    return await run_multipass(*args)
+-
+-
+-@mcp.tool()
+-async def set_config(key: str, value: str) -> str:
+-    """Set a Multipass configuration value.
+-
+-    Args:
+-        key: Setting key (e.g. "local.driver").
+-        value: New value to set.
+-    """
+-    return await run_multipass("set", f"{key}={value}")
+-
+-
+-# ---------------------------------------------------------------------------
+-# Tools — System
+-# ---------------------------------------------------------------------------
+-
+-
+-@mcp.tool()
+-async def purge() -> str:
+-    """Permanently delete all trashed (deleted) Multipass instances.
+-
+-    This is irreversible. All instances previously deleted with 'delete' will be
+-    permanently removed.
+-    """
+-    return await run_multipass("purge")
+-
+-
+-@mcp.tool()
+-async def authenticate(passphrase: str) -> str:
+-    """Authenticate with the Multipass service using a passphrase.
+-
+-    Args:
+-        passphrase: Authentication passphrase.
+-    """
+-    return await run_multipass("authenticate", passphrase)
+-
+-
+-# ---------------------------------------------------------------------------
+-# Entry point
+-# ---------------------------------------------------------------------------
+-
+-
+-def main():
+-    mcp.run(transport="stdio")
+-
+-
+-if __name__ == "__main__":
+-    main()
+diff --git a/main.go b/main.go
+index 1e2628f..814c328 100644
+--- a/main.go
++++ b/main.go
+@@ -8,10 +8,13 @@ import (
+ 	"github.com/rootisgod/multipass-mcp/tools"
+ )
+ 
++// version is set at build time via -ldflags "-X main.version=..."
++var version = "dev"
++
+ func main() {
+ 	s := server.NewMCPServer(
+ 		"multipass",
+-		"0.1.4",
++		version,
+ 		server.WithToolCapabilities(true),
+ 		server.WithResourceCapabilities(true, true),
+ 	)
+diff --git a/smithery.yaml b/smithery.yaml
+deleted file mode 100644
+index b2c05dd..0000000
+--- a/smithery.yaml
++++ /dev/null
+@@ -1,13 +0,0 @@
+-build:
+-  dockerBuildPath: ./
+-
+-startCommand:
+-  type: stdio
+-  configSchema:
+-    type: object
+-    properties: {}
+-  commandFunction: |-
+-    (config) => ({
+-      command: "multipass-mcp",
+-      args: []
+-    })
+diff --git a/tools/config.go b/tools/config.go
+index 3424af5..100a09e 100644
+--- a/tools/config.go
++++ b/tools/config.go
+@@ -9,18 +9,28 @@ import (
+ 
+ func RegisterConfigTools(s *server.MCPServer) {
+ 	s.AddTool(
+-		mcp.NewTool("get_config",
++		mcp.NewTool("multipass_get_config",
+ 			mcp.WithDescription("Get Multipass configuration settings."),
+ 			mcp.WithString("key", mcp.Description("Specific setting key (e.g. \"local.driver\"). Omit to get all settings.")),
++			mcp.WithTitleAnnotation("Multipass: Get Config"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleGetConfig,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("set_config",
++		mcp.NewTool("multipass_set_config",
+ 			mcp.WithDescription("Set a Multipass configuration value."),
+ 			mcp.WithString("key", mcp.Required(), mcp.Description("Setting key (e.g. \"local.driver\").")),
+ 			mcp.WithString("value", mcp.Required(), mcp.Description("New value to set.")),
++			mcp.WithTitleAnnotation("Multipass: Set Config"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleSetConfig,
+ 	)
+diff --git a/tools/exec.go b/tools/exec.go
+index 92e7920..df3d859 100644
+--- a/tools/exec.go
++++ b/tools/exec.go
+@@ -13,18 +13,23 @@ import (
+ 
+ func RegisterExecTools(s *server.MCPServer) {
+ 	s.AddTool(
+-		mcp.NewTool("run_script",
++		mcp.NewTool("multipass_run_script",
+ 			mcp.WithDescription("Run a multi-line script inside a Multipass instance. The script is transferred to the instance, executed with the specified interpreter, and cleaned up automatically. Use this for complex multi-step operations instead of chaining exec_command calls."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
+ 			mcp.WithString("script", mcp.Required(), mcp.Description("The script content to execute (multi-line string).")),
+ 			mcp.WithString("interpreter", mcp.Description("Interpreter to run the script with (default \"bash\"). Examples: \"bash\", \"python3\", \"sh\".")),
+ 			mcp.WithString("working_directory", mcp.Description("Working directory inside the instance.")),
++			mcp.WithTitleAnnotation("Multipass: Run Script"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(false),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleRunScript,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("exec_command",
++		mcp.NewTool("multipass_exec_command",
+ 			mcp.WithDescription("Execute a command inside a Multipass instance."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
+ 			mcp.WithArray("command",
+@@ -33,6 +38,11 @@ func RegisterExecTools(s *server.MCPServer) {
+ 				mcp.Items(map[string]any{"type": "string"}),
+ 			),
+ 			mcp.WithString("working_directory", mcp.Description("Working directory inside the instance.")),
++			mcp.WithTitleAnnotation("Multipass: Execute Command"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(false),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleExecCommand,
+ 	)
+diff --git a/tools/files.go b/tools/files.go
+index be5510d..39851a0 100644
+--- a/tools/files.go
++++ b/tools/files.go
+@@ -9,31 +9,46 @@ import (
+ 
+ func RegisterFileTools(s *server.MCPServer) {
+ 	s.AddTool(
+-		mcp.NewTool("transfer",
+-			mcp.WithDescription("Transfer files between host and a Multipass instance.\n\nUse <name>:<path> syntax for instance paths (e.g. \"my-vm:/home/ubuntu/file.txt\").\nUse a plain path for host paths (e.g. \"/tmp/file.txt\")."),
++		mcp.NewTool("multipass_transfer",
++			mcp.WithDescription("Transfer files between host and a Multipass instance.\n\nUse <n>:<path> syntax for instance paths (e.g. \"my-vm:/home/ubuntu/file.txt\").\nUse a plain path for host paths (e.g. \"/tmp/file.txt\")."),
+ 			mcp.WithString("source", mcp.Required(), mcp.Description("Source path (host path or instance:path).")),
+ 			mcp.WithString("destination", mcp.Required(), mcp.Description("Destination path (host path or instance:path).")),
+ 			mcp.WithBoolean("recursive", mcp.Description("Transfer directories recursively.")),
++			mcp.WithTitleAnnotation("Multipass: Transfer Files"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(false),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleTransfer,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("mount_directory",
++		mcp.NewTool("multipass_mount_directory",
+ 			mcp.WithDescription("Mount a host directory inside a Multipass instance."),
+ 			mcp.WithString("source", mcp.Required(), mcp.Description("Host directory path to mount.")),
+ 			mcp.WithString("target", mcp.Required(), mcp.Description("Mount point in instance:path format (e.g. \"my-vm:/mnt/data\").")),
+ 			mcp.WithString("uid_map", mcp.Description("UID mapping in host:instance format (e.g. \"1000:0\").")),
+ 			mcp.WithString("gid_map", mcp.Description("GID mapping in host:instance format (e.g. \"1000:0\").")),
+ 			mcp.WithString("mount_type", mcp.Description("Mount type: \"classic\" or \"native\".")),
++			mcp.WithTitleAnnotation("Multipass: Mount Directory"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleMountDirectory,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("umount_directory",
++		mcp.NewTool("multipass_umount_directory",
+ 			mcp.WithDescription("Unmount a directory from a Multipass instance."),
+ 			mcp.WithString("mount_path", mcp.Required(), mcp.Description("Mount point to remove (instance:path format or host path).")),
++			mcp.WithTitleAnnotation("Multipass: Unmount Directory"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleUmountDirectory,
+ 	)
+diff --git a/tools/info.go b/tools/info.go
+index 3758b80..b044653 100644
+--- a/tools/info.go
++++ b/tools/info.go
+@@ -13,100 +13,165 @@ import (
+ 
+ func RegisterInfoTools(s *server.MCPServer) {
+ 	s.AddTool(
+-		mcp.NewTool("list_instances",
++		mcp.NewTool("multipass_list_instances",
+ 			mcp.WithDescription("List all Multipass instances with their state, IP addresses, and image info."),
++			mcp.WithTitleAnnotation("Multipass: List Instances"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleListInstancesTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("get_instance",
++		mcp.NewTool("multipass_get_instance",
+ 			mcp.WithDescription("Get detailed information about a specific Multipass instance including CPU, memory, disk usage, mounts, and snapshots."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
++			mcp.WithTitleAnnotation("Multipass: Get Instance Details"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleGetInstanceTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("find_images",
++		mcp.NewTool("multipass_find_images",
+ 			mcp.WithDescription("List available Multipass images that can be launched (Ubuntu releases, blueprints, etc)."),
++			mcp.WithTitleAnnotation("Multipass: Find Images"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleFindImagesTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("list_networks",
++		mcp.NewTool("multipass_list_networks",
+ 			mcp.WithDescription("List host network interfaces available for Multipass instances."),
++			mcp.WithTitleAnnotation("Multipass: List Networks"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleListNetworksTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("list_snapshots",
++		mcp.NewTool("multipass_list_snapshots",
+ 			mcp.WithDescription("List all snapshots for a specific Multipass instance."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
++			mcp.WithTitleAnnotation("Multipass: List Snapshots"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleListSnapshotsTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("get_version",
++		mcp.NewTool("multipass_get_version",
+ 			mcp.WithDescription("Get Multipass version and daemon information."),
++			mcp.WithTitleAnnotation("Multipass: Get Version"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleGetVersionTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("list_aliases",
++		mcp.NewTool("multipass_list_aliases",
+ 			mcp.WithDescription("List configured Multipass command aliases."),
++			mcp.WithTitleAnnotation("Multipass: List Aliases"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleListAliasesTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("list_mounts",
++		mcp.NewTool("multipass_list_mounts",
+ 			mcp.WithDescription("List active mounts for a Multipass instance. Returns mount source, target, UID/GID mappings."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
++			mcp.WithTitleAnnotation("Multipass: List Mounts"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleListMountsTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("list_deleted",
++		mcp.NewTool("multipass_list_deleted",
+ 			mcp.WithDescription("List only deleted (trashed) Multipass instances that can be recovered or purged."),
++			mcp.WithTitleAnnotation("Multipass: List Deleted Instances"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleListDeletedTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("instance_exists",
++		mcp.NewTool("multipass_instance_exists",
+ 			mcp.WithDescription("Check if a Multipass instance exists by name. Returns exists (bool), state, and image. Use before launch to avoid duplicates or before lifecycle commands to verify the target."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name to check.")),
++			mcp.WithTitleAnnotation("Multipass: Check Instance Exists"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleInstanceExistsTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("get_bridged_network",
++		mcp.NewTool("multipass_get_bridged_network",
+ 			mcp.WithDescription("Get the configured bridged network interface name. Returns the network used when launching with --network bridged."),
++			mcp.WithTitleAnnotation("Multipass: Get Bridged Network"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleGetBridgedNetworkTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("disk_usage_check",
++		mcp.NewTool("multipass_disk_usage_check",
+ 			mcp.WithDescription("Check disk usage for a Multipass instance. Returns total, used, percentage, and a warning if usage exceeds the threshold."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
+ 			mcp.WithNumber("warn_percent", mcp.Description("Warning threshold percentage (default 80).")),
++			mcp.WithTitleAnnotation("Multipass: Check Disk Usage"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleDiskUsageCheckTool,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("wait_until_running",
++		mcp.NewTool("multipass_wait_until_running",
+ 			mcp.WithDescription("Wait for a Multipass instance to reach Running state. Polls until the instance is running or timeout is reached. Useful after launch, start, or restart."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name.")),
+ 			mcp.WithNumber("timeout", mcp.Description("Max seconds to wait (default 120).")),
++			mcp.WithTitleAnnotation("Multipass: Wait Until Running"),
++			mcp.WithReadOnlyHintAnnotation(true),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleWaitUntilRunningTool,
+ 	)
+@@ -256,7 +321,7 @@ func handleGetBridgedNetworkTool(ctx context.Context, req mcp.CallToolRequest) (
+ 	result, err := runMultipass(ctx, defaultTimeout, "get", "local.bridged-network")
+ 	if err != nil {
+ 		if strings.Contains(err.Error(), "is not a valid key") || strings.Contains(err.Error(), "not set") {
+-			return mcp.NewToolResultText(`{"bridged_network": null, "message": "No bridged network configured. Use set_config to set local.bridged-network."}`), nil
++			return mcp.NewToolResultText(`{"bridged_network": null, "message": "No bridged network configured. Use multipass_set_config to set local.bridged-network."}`), nil
+ 		}
+ 		return mcp.NewToolResultError(err.Error()), nil
+ 	}
+diff --git a/tools/instance.go b/tools/instance.go
+index 277bbc0..ab81ff0 100644
+--- a/tools/instance.go
++++ b/tools/instance.go
+@@ -11,7 +11,7 @@ import (
+ 
+ func RegisterInstanceTools(s *server.MCPServer) {
+ 	s.AddTool(
+-		mcp.NewTool("launch",
++		mcp.NewTool("multipass_launch",
+ 			mcp.WithDescription("Launch a new Multipass VM instance."),
+ 			mcp.WithString("image", mcp.Description("Image to launch (e.g. \"22.04\", \"daily:24.04\"). Defaults to latest LTS.")),
+ 			mcp.WithString("name", mcp.Description("Name for the instance. Auto-generated if omitted.")),
+@@ -22,56 +22,91 @@ func RegisterInstanceTools(s *server.MCPServer) {
+ 			mcp.WithString("network", mcp.Description("Network to connect to (from multipass networks).")),
+ 			mcp.WithString("mount", mcp.Description("Host path to mount in the instance (source:target format).")),
+ 			mcp.WithNumber("timeout", mcp.Description("Timeout in seconds (default 600 — image downloads can be slow).")),
++			mcp.WithTitleAnnotation("Multipass: Launch Instance"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(false),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleLaunch,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("start",
++		mcp.NewTool("multipass_start",
+ 			mcp.WithDescription("Start a stopped Multipass instance."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to start all instances.")),
++			mcp.WithTitleAnnotation("Multipass: Start Instance"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleStart,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("stop",
++		mcp.NewTool("multipass_stop",
+ 			mcp.WithDescription("Stop a running Multipass instance."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to stop all instances.")),
+ 			mcp.WithBoolean("force", mcp.Description("Force stop without waiting for graceful shutdown.")),
++			mcp.WithTitleAnnotation("Multipass: Stop Instance"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleStop,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("restart",
++		mcp.NewTool("multipass_restart",
+ 			mcp.WithDescription("Restart a Multipass instance."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to restart all instances.")),
++			mcp.WithTitleAnnotation("Multipass: Restart Instance"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(false),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleRestart,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("suspend",
++		mcp.NewTool("multipass_suspend",
+ 			mcp.WithDescription("Suspend a running Multipass instance."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to suspend all instances.")),
++			mcp.WithTitleAnnotation("Multipass: Suspend Instance"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleSuspend,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("delete",
++		mcp.NewTool("multipass_delete",
+ 			mcp.WithDescription("Delete a Multipass instance (can be recovered unless purged)."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to delete all instances.")),
+ 			mcp.WithBoolean("purge", mcp.Description("Permanently delete instead of moving to trash.")),
++			mcp.WithTitleAnnotation("Multipass: Delete Instance"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(true),
++			mcp.WithIdempotentHintAnnotation(false),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleDelete,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("recover",
++		mcp.NewTool("multipass_recover",
+ 			mcp.WithDescription("Recover a deleted (trashed) Multipass instance."),
+ 			mcp.WithString("name", mcp.Required(), mcp.Description("Instance name, or \"all\" to recover all deleted instances.")),
++			mcp.WithTitleAnnotation("Multipass: Recover Instance"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleRecover,
+ 	)
+diff --git a/tools/snapshots.go b/tools/snapshots.go
+index 78ad11a..d47ad01 100644
+--- a/tools/snapshots.go
++++ b/tools/snapshots.go
+@@ -10,30 +10,45 @@ import (
+ 
+ func RegisterSnapshotTools(s *server.MCPServer) {
+ 	s.AddTool(
+-		mcp.NewTool("snapshot",
++		mcp.NewTool("multipass_snapshot",
+ 			mcp.WithDescription("Create a snapshot of a stopped Multipass instance.\n\nThe instance must be stopped before taking a snapshot."),
+ 			mcp.WithString("instance", mcp.Required(), mcp.Description("Instance name.")),
+ 			mcp.WithString("name", mcp.Description("Snapshot name. Auto-generated if omitted.")),
+ 			mcp.WithString("comment", mcp.Description("Description or comment for the snapshot.")),
++			mcp.WithTitleAnnotation("Multipass: Create Snapshot"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(false),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleSnapshot,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("restore",
++		mcp.NewTool("multipass_restore",
+ 			mcp.WithDescription("Restore a Multipass instance to a snapshot.\n\nThe instance must be stopped. Use destructive=true to discard current state."),
+ 			mcp.WithString("instance", mcp.Required(), mcp.Description("Instance name.")),
+ 			mcp.WithString("snapshot", mcp.Required(), mcp.Description("Snapshot name to restore to.")),
+ 			mcp.WithBoolean("destructive", mcp.Description("Discard current instance state (required if state changed since snapshot).")),
++			mcp.WithTitleAnnotation("Multipass: Restore Snapshot"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(true),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleRestore,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("clone",
++		mcp.NewTool("multipass_clone",
+ 			mcp.WithDescription("Clone a stopped Multipass instance into an independent copy.\n\nThe source instance must be stopped."),
+ 			mcp.WithString("source_name", mcp.Required(), mcp.Description("Name of the instance to clone.")),
+ 			mcp.WithString("name", mcp.Description("Name for the new cloned instance. Auto-generated if omitted.")),
++			mcp.WithTitleAnnotation("Multipass: Clone Instance"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(false),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleClone,
+ 	)
+diff --git a/tools/system.go b/tools/system.go
+index 3cb468d..69b0a55 100644
+--- a/tools/system.go
++++ b/tools/system.go
+@@ -9,16 +9,26 @@ import (
+ 
+ func RegisterSystemTools(s *server.MCPServer) {
+ 	s.AddTool(
+-		mcp.NewTool("purge",
+-			mcp.WithDescription("Permanently delete all trashed (deleted) Multipass instances.\n\nThis is irreversible. All instances previously deleted with 'delete' will be permanently removed."),
++		mcp.NewTool("multipass_purge",
++			mcp.WithDescription("Permanently delete all trashed (deleted) Multipass instances.\n\nThis is irreversible. All instances previously deleted with 'multipass_delete' will be permanently removed."),
++			mcp.WithTitleAnnotation("Multipass: Purge Deleted Instances"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(true),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handlePurge,
+ 	)
+ 
+ 	s.AddTool(
+-		mcp.NewTool("authenticate",
++		mcp.NewTool("multipass_authenticate",
+ 			mcp.WithDescription("Authenticate with the Multipass service using a passphrase."),
+ 			mcp.WithString("passphrase", mcp.Required(), mcp.Description("Authentication passphrase.")),
++			mcp.WithTitleAnnotation("Multipass: Authenticate"),
++			mcp.WithReadOnlyHintAnnotation(false),
++			mcp.WithDestructiveHintAnnotation(false),
++			mcp.WithIdempotentHintAnnotation(true),
++			mcp.WithOpenWorldHintAnnotation(false),
+ 		),
+ 		handleAuthenticate,
+ 	)
+-- 
+2.43.0
+

@@ -12,7 +12,7 @@ An MCP server for managing [Multipass](https://multipass.run/) virtual machines 
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install iainmckee/tap/multipass-mcp
+brew install rootisgod/tap/multipass-mcp
 ```
 
 ### Go install

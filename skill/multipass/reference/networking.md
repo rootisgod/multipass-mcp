@@ -53,15 +53,23 @@ With MCP: `multipass_get_bridged_network` — returns the configured interface o
 
 ## SSH from Host to VM
 
-Multipass VMs are already accessible via `multipass exec` and `multipass shell`, but if you need direct SSH:
+Multipass automatically configures SSH on every VM — no manual key setup required. This is the recommended way to execute commands inside VMs (see SKILL.md "Command Execution" section).
 
-1. The `ubuntu` user exists by default with passwordless sudo
-2. Get the VM's IP from `multipass list`
-3. Multipass automatically sets up SSH keys — you can SSH with:
-   ```bash
-   ssh ubuntu@<vm-ip>
-   ```
-4. To add custom SSH keys, use the `scripts/setup_ssh_keys.sh` script or cloud-init `ssh_authorized_keys`
+- **Default user**: `ubuntu` with passwordless sudo
+- **SSH keys**: Automatically configured by Multipass at launch
+- **No setup needed**: SSH works immediately after the VM is running
+
+```bash
+# Get the VM's IP
+multipass list                              # or multipass_list_instances (MCP)
+
+# SSH in
+ssh ubuntu@<vm-ip>                          # Interactive shell
+ssh ubuntu@<vm-ip> -- ls /etc              # Single command
+ssh ubuntu@<vm-ip> -- sudo apt update      # Passwordless sudo
+```
+
+To add custom SSH keys (e.g., for other users or CI systems), use the `scripts/setup_ssh_keys.sh` script or cloud-init `ssh_authorized_keys`.
 
 ## Port Forwarding
 

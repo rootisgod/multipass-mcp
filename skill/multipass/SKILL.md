@@ -27,14 +27,39 @@ This skill is designed to work alongside the **multipass-mcp** MCP server, which
 
 The MCP server is optional but strongly recommended — it gives you structured JSON responses, proper error handling, and destructive-action annotations that raw CLI calls lack. If the MCP tools aren't detected, the skill falls back to bash `multipass` commands automatically.
 
-## MCP Detection
+## Command Execution — Three Options
 
-At the start of any Multipass workflow, determine which interface to use:
+You have three ways to run commands inside VMs. Choose based on context:
+
+| Method | When to Use | Example |
+|--------|-------------|---------|
+| **SSH** (`ssh ubuntu@<ip>`) | Best for most command execution — direct, standard, works with pipes/redirects naturally | `ssh ubuntu@192.168.2.82 kubectl get nodes` |
+| **MCP tools** (`multipass_exec_command` / `multipass_run_script`) | VM lifecycle, structured JSON responses, safety annotations on destructive actions | `multipass_exec_command` with `name=my-vm, command=["ls"]` |
+| **CLI** (`multipass exec`) | Fallback when MCP is unavailable | `multipass exec my-vm -- kubectl get nodes` |
+
+### SSH Access (Recommended for Commands)
+
+Multipass automatically configures SSH access on every VM — no key setup required. The default user is `ubuntu` with passwordless sudo. After launching a VM, you can immediately SSH in:
+
+```bash
+ssh ubuntu@<vm-ip>                          # Interactive shell
+ssh ubuntu@<vm-ip> -- kubectl get nodes     # Run a single command
+ssh ubuntu@<vm-ip> -- sudo apt install foo  # Passwordless sudo works
+```
+
+Get VM IPs from `multipass list`, `multipass_list_instances` (MCP), or `multipass_get_instance` (MCP).
+
+**Why prefer SSH?** It uses standard tooling, avoids the MCP/CLI abstraction layer, handles pipes and redirects naturally, and works identically whether the MCP server is connected or not.
+
+### MCP Detection
+
+At the start of any Multipass workflow, determine MCP availability for lifecycle operations:
 
 ```
 1. Check: Is the multipass_list_instances tool available?
-   → YES: Use multipass_* MCP tools throughout (preferred — structured JSON, error handling)
+   → YES: Use multipass_* MCP tools for lifecycle ops (launch, stop, delete, snapshot)
    → NO:  Use bash with `multipass` CLI commands (append --format json where useful)
+2. For running commands inside VMs: prefer SSH regardless of MCP availability
 ```
 
 If MCP tools are available, read `reference/mcp_tools.md` to understand tool names, parameters, and which ones are destructive. If not, read `reference/multipass_cli.md` for CLI flag reference.

@@ -4,30 +4,44 @@ An MCP server for managing [Multipass](https://multipass.run/) virtual machines 
 
 > **Note:** A few interactive/niche CLI verbs (`shell`, `alias`, `unalias`, `prefer`) are not exposed as tools since they either require a TTY or are rarely needed by AI assistants.
 
-## Prerequisites
+## Quick Start
+
+| Step | macOS | Linux | Windows |
+|------|-------|-------|---------|
+| Install Multipass | `brew install --cask multipass` | `sudo snap install multipass` | [Download installer](https://multipass.run/install) |
+| Install MCP server ([Brew](https://brew.sh)) | `brew install rootisgod/tap/multipass-mcp` | `brew install rootisgod/tap/multipass-mcp` | `go install github.com/rootisgod/multipass-mcp@latest` |
+| Register with Claude | `claude mcp add multipass-mcp -- multipass-mcp` | `claude mcp add multipass-mcp -- multipass-mcp` | `claude mcp add multipass-mcp -- multipass-mcp` |
+| Install skill (optional) | `git clone https://github.com/rootisgod/multipass-mcp.git /tmp/multipass-mcp && cp -r /tmp/multipass-mcp/skill/multipass ~/.claude/skills/multipass && rm -rf /tmp/multipass-mcp` | Same as macOS | `git clone https://github.com/rootisgod/multipass-mcp.git %TEMP%\multipass-mcp && xcopy /E /I %TEMP%\multipass-mcp\skill\multipass %USERPROFILE%\.claude\skills\multipass && rmdir /S /Q %TEMP%\multipass-mcp` |
+| Verify | `claude mcp list` | `claude mcp list` | `claude mcp list` |
+
+## Manual Installation
+
+If you prefer to install step by step, or need an alternative installation method, follow the sections below.
+
+### Prerequisites
 
 - [Multipass](https://multipass.run/) installed and on your PATH
 - Verify with: `multipass version`
 
-## Installation
+### Installation
 
-### Homebrew (macOS/Linux)
+#### Homebrew (macOS/Linux)
 
 ```bash
 brew install rootisgod/tap/multipass-mcp
 ```
 
-### Go install
+#### Go install
 
 ```bash
 go install github.com/rootisgod/multipass-mcp@latest
 ```
 
-### Download binary
+#### Download binary
 
 Download the latest binary for your platform from the [releases page](https://github.com/rootisgod/multipass-mcp/releases).
 
-### Build from source
+#### Build from source
 
 ```bash
 git clone https://github.com/rootisgod/multipass-mcp.git
@@ -35,15 +49,22 @@ cd multipass-mcp
 CGO_ENABLED=0 go build -ldflags "-X main.version=$(git describe --tags --always)" -o multipass-mcp .
 ```
 
-## Configuration
+### Configuration
 
-### Claude Code
+#### Claude Code
 
 ```bash
+# If installed via Homebrew or go install (binary is on PATH)
+claude mcp add multipass-mcp -- multipass-mcp
+
+# If using a downloaded binary
 claude mcp add multipass-mcp -- /path/to/multipass-mcp
+
+# Verify it's registered
+claude mcp list
 ```
 
-### Claude Desktop
+#### Claude Desktop
 
 Add to your config file:
 
@@ -60,7 +81,7 @@ Add to your config file:
 }
 ```
 
-### Cursor
+#### Cursor
 
 Add to `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` globally):
 
@@ -74,7 +95,7 @@ Add to `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` globally
 }
 ```
 
-### VS Code (Copilot)
+#### VS Code (Copilot)
 
 Add to `.vscode/mcp.json` in your project root:
 
@@ -89,7 +110,7 @@ Add to `.vscode/mcp.json` in your project root:
 }
 ```
 
-### Windsurf
+#### Windsurf
 
 Add to `~/.codeium/windsurf/mcp_config.json`:
 

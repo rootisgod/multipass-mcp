@@ -32,7 +32,7 @@ func runMultipass(ctx context.Context, timeout time.Duration, args ...string) (s
 		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return "", fmt.Errorf("multipass %s failed (exit %d): %s",
-				strings.Join(args, " "), exitErr.ExitCode(), strings.TrimSpace(string(exitErr.Stderr)))
+				redactArgs(args), exitErr.ExitCode(), strings.TrimSpace(string(exitErr.Stderr)))
 		}
 		return "", fmt.Errorf("multipass %s: %w", args[0], err)
 	}
@@ -51,4 +51,24 @@ func runMultipassJSON(ctx context.Context, timeout time.Duration, args ...string
 		return nil, fmt.Errorf("failed to parse JSON output: %w", err)
 	}
 	return raw, nil
+}
+
+// redactArgs formats CLI args for error messages, redacting sensitive values.
+func redactArgs(args []string) string {
+	if len(args) >= 2 && args[0] == "authenticate" {
+		return "authenticate <redacted>"
+	}
+	if len(args) >= 2 && args[0] == "set" {
+		redacted := make([]string, len(args))
+		redacted[0] = args[0]
+		for i := 1; i < len(args); i++ {
+			if idx := strings.Index(args[i], "="); idx >= 0 {
+				redacted[i] = args[i][:idx+1] + "<redacted>"
+			} else {
+				redacted[i] = args[i]
+			}
+		}
+		return strings.Join(redacted, " ")
+	}
+	return strings.Join(args, " ")
 }

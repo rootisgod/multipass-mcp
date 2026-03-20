@@ -39,6 +39,7 @@ func RegisterExecTools(s *server.MCPServer) {
 				mcp.Items(map[string]any{"type": "string"}),
 			),
 			mcp.WithString("working_directory", mcp.Description("Working directory inside the instance.")),
+			mcp.WithNumber("timeout", mcp.Description("Timeout in seconds (default 300). Increase for long-running commands.")),
 			mcp.WithTitleAnnotation("Multipass: Execute Command"),
 			mcp.WithReadOnlyHintAnnotation(false),
 			mcp.WithDestructiveHintAnnotation(false),
@@ -142,7 +143,12 @@ func handleExecCommand(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 		cmdArgs = append(cmdArgs, s)
 	}
 
-	result, err := runMultipass(ctx, defaultTimeout, cmdArgs...)
+	timeout := defaultTimeout
+	if t := req.GetInt("timeout", 0); t > 0 {
+		timeout = time.Duration(t) * time.Second
+	}
+
+	result, err := runMultipass(ctx, timeout, cmdArgs...)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

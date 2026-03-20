@@ -1,6 +1,8 @@
 # multipass-mcp
 
-An MCP server for managing [Multipass](https://multipass.run/) virtual machines through AI assistants. Exposes the full Multipass CLI as MCP tools and resources, letting Claude (or any MCP client) launch, configure, snapshot, and manage Ubuntu VMs.
+An MCP server for managing [Multipass](https://multipass.run/) virtual machines through AI assistants. Provides broad coverage of the Multipass CLI as MCP tools and resources, letting Claude (or any MCP client) launch, configure, snapshot, and manage Ubuntu VMs.
+
+> **Note:** A few interactive/niche CLI verbs (`shell`, `alias`, `unalias`, `prefer`) are not exposed as tools since they either require a TTY or are rarely needed by AI assistants.
 
 ## Prerequisites
 
@@ -149,7 +151,7 @@ For `multipass_start`, `multipass_stop`, `multipass_restart`, `multipass_suspend
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `multipass_exec_command` | Run a command inside an instance | `name`, `command` (list of strings), `working_directory` |
+| `multipass_exec_command` | Run a command inside an instance | `name`, `command` (list of strings), `working_directory`, `timeout` |
 | `multipass_run_script` | Run a multi-line script inside an instance | `name`, `script`, `interpreter`, `working_directory` |
 
 The `command` parameter takes a list of strings (e.g. `["ls", "-la", "/tmp"]`) rather than a shell string. This avoids shell injection and ensures each argument is passed correctly.

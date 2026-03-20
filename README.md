@@ -60,6 +60,49 @@ Add to your config file:
 }
 ```
 
+### Cursor
+
+Add to `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` globally):
+
+```json
+{
+  "mcpServers": {
+    "multipass": {
+      "command": "/path/to/multipass-mcp"
+    }
+  }
+}
+```
+
+### VS Code (Copilot)
+
+Add to `.vscode/mcp.json` in your project root:
+
+```json
+{
+  "servers": {
+    "multipass": {
+      "type": "stdio",
+      "command": "/path/to/multipass-mcp"
+    }
+  }
+}
+```
+
+### Windsurf
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "multipass": {
+      "command": "/path/to/multipass-mcp"
+    }
+  }
+}
+```
+
 ## Claude Skill (Optional)
 
 A companion **Claude skill** is included in this repo at [`skill/multipass/`](skill/multipass/). The MCP server gives Claude the *ability* to manage VMs; the skill gives it the *judgment* of when and how — decision trees for resource sizing, cloud-init templates, workflow playbooks, and error recovery patterns.

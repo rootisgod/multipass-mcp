@@ -1,5 +1,7 @@
 # multipass-mcp
 
+![Multipass MCP Banner](assets/banner.png)
+
 An MCP server for managing [Multipass](https://multipass.run/) virtual machines through AI assistants. Provides broad coverage of the Multipass CLI as MCP tools and resources, letting Claude (or any MCP client) launch, configure, snapshot, and manage Ubuntu VMs.
 
 > **Note:** A few interactive/niche CLI verbs (`shell`, `alias`, `unalias`, `prefer`) are not exposed as tools since they either require a TTY or are rarely needed by AI assistants.
